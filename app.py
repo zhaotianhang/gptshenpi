@@ -5,8 +5,10 @@ if not hasattr(werkzeug, "__version__"):
 from flask import Flask, request, jsonify
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
+from controllers.approval import bp as approval_bp, reset_data as reset_approval_data
 
 app = Flask(__name__)
+app.register_blueprint(approval_bp)
 
 
 def reset_data():
@@ -17,6 +19,7 @@ def reset_data():
         {'id': 1, 'username': 'admin', 'password': 'admin', 'role': 'admin', 'org_id': 1, 'dept_id': 1},
         {'id': 2, 'username': 'user', 'password': 'user', 'role': 'user', 'org_id': 1, 'dept_id': 1}
     ]
+    reset_approval_data()
 
 
 reset_data()

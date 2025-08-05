@@ -11,6 +11,8 @@ def generate_token(user):
     payload = {
         'id': user['id'],
         'role': user['role'],
+        'org_id': user.get('org_id'),
+        'dept_id': user.get('dept_id'),
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     return jwt.encode(payload, SECRET, algorithm='HS256')
