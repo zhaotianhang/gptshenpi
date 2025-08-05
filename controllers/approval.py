@@ -7,19 +7,48 @@ bp = Blueprint('approval', __name__, url_prefix='/approvals')
 
 approval_forms = []
 submission_records = []
+approval_records = []
+verification_records = []
 _next_id = 1
 _next_code = 1
 
+
 def reset_data():
-    global approval_forms, submission_records, _next_id, _next_code
+    global approval_forms, submission_records, approval_records, verification_records, _next_id, _next_code
     approval_forms = []
     submission_records = []
+    approval_records = []
+    verification_records = []
     _next_id = 1
     _next_code = 1
 
 
 def _find_form(form_id):
     return next((f for f in approval_forms if f['id'] == form_id), None)
+
+
+def _find_submission_record(form_id):
+    return next((r for r in submission_records if r['form_id'] == form_id), None)
+
+
+def _after_approval(form, result):
+    """Trigger verification or finalize the workflow after approval."""
+    if result == 'approved':
+        if form['data'].get('requires_verification'):
+            vr = {
+                'id': len(verification_records) + 1,
+                'form_id': form['id'],
+                'status': 'pending',
+                'verifier_id': None,
+                'verified_at': None,
+                'comments': None,
+            }
+            verification_records.append(vr)
+            form['status'] = 'verification_pending'
+        else:
+            form['status'] = 'approved'
+    else:
+        form['status'] = 'rejected'
 
 
 @bp.post('')
@@ -82,5 +111,41 @@ def reject_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
-    form['status'] = 'rejected'
+    payload = request.get_json() or {}
+    now = datetime.utcnow().isoformat()
+    sr = _find_submission_record(form_id)
+    record = {
+        'id': len(approval_records) + 1,
+        'form_id': form_id,
+        'approver_id': request.user['id'],
+        'submission_id': sr['id'] if sr else None,
+        'result': 'rejected',
+        'comments': payload.get('comments'),
+        'acted_at': now,
+    }
+    approval_records.append(record)
+    _after_approval(form, 'rejected')
+    return jsonify(form)
+
+
+@bp.post('/<int:form_id>/approve')
+@authenticate_token
+def approve_form(form_id):
+    form = _find_form(form_id)
+    if not form:
+        return '', 404
+    payload = request.get_json() or {}
+    now = datetime.utcnow().isoformat()
+    sr = _find_submission_record(form_id)
+    record = {
+        'id': len(approval_records) + 1,
+        'form_id': form_id,
+        'approver_id': request.user['id'],
+        'submission_id': sr['id'] if sr else None,
+        'result': 'approved',
+        'comments': payload.get('comments'),
+        'acted_at': now,
+    }
+    approval_records.append(record)
+    _after_approval(form, 'approved')
     return jsonify(form)

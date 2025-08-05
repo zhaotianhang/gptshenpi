@@ -27,7 +27,10 @@ class ApprovalRecord(TimestampMixin, Base):
     id = Column(Integer, primary_key=True)
     form_id = Column(Integer, ForeignKey("approval_forms.id"), nullable=False)
     approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    action = Column(Enum(ActionType), nullable=False)
+    submission_record_id = Column(
+        Integer, ForeignKey("submission_records.id"), nullable=True
+    )
+    result = Column(Enum(ActionType), nullable=False)
     comments = Column(String(255))
     acted_at = Column(DateTime)
     delegated_to_id = Column(Integer, ForeignKey("users.id"))
@@ -36,6 +39,9 @@ class ApprovalRecord(TimestampMixin, Base):
     form = relationship("ApprovalForm", back_populates="approval_records")
     approver = relationship(
         "User", back_populates="approval_records", foreign_keys=[approver_id]
+    )
+    submission_record = relationship(
+        "SubmissionRecord", back_populates="approval_records"
     )
     delegated_to = relationship(
         "User", back_populates="delegated_records", foreign_keys=[delegated_to_id]
