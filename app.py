@@ -1,3 +1,7 @@
+import werkzeug
+if not hasattr(werkzeug, "__version__"):
+    werkzeug.__version__ = "3"
+
 from flask import Flask, request, jsonify
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
