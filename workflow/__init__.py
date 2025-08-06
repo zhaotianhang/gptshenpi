@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from notifications import send as send_notification
+
 
 @dataclass
 class Node:
@@ -90,3 +92,14 @@ class Workflow:
         if nxt:
             targets.extend(nxt.approvers)
         return targets
+
+    def notify(self, node_id: str, message: str, context: Optional[Dict[str, Any]] = None,
+               channels: Optional[List[str]] = None) -> None:
+        """Send a notification after the specified node is completed.
+
+        Notifications are delivered to the next approver(s) or any additional
+        push targets defined for the node.
+        """
+        recipients = self.push_targets(node_id, context)
+        if recipients:
+            send_notification(recipients, message, channels)
