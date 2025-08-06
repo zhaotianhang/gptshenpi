@@ -15,6 +15,9 @@ app.register_blueprint(approval_bp)
 app.register_blueprint(verification_bp)
 app.register_blueprint(statistics_bp)
 
+@app.get('/')
+def user_page():
+    return send_from_directory('frontend', 'index.html')
 
 @app.get('/admin')
 def admin_page():

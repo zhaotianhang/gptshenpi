@@ -1,4 +1,5 @@
-const { BrowserRouter, Routes, Route, Link, useNavigate, useParams } = ReactRouterDOM;
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
 const API_BASE = '/api';
 
 function apiFetch(path, options = {}) {
@@ -163,4 +164,4 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+export default App
