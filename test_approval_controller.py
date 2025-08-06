@@ -99,3 +99,38 @@ def test_create_submit_approve_flow():
     assert a_record['acted_at']
     # no verification triggered by default
     assert approval.verification_records == []
+
+
+def test_list_forms_by_user_and_status():
+    client = app.test_client()
+    t_admin = token(client)
+    # admin creates and submits a form
+    resp = client.post('/approvals', json={'data': {'amount': 1}}, headers={'Authorization': f'Bearer {t_admin}'})
+    assert resp.status_code == 201
+    form1 = resp.get_json()
+    resp = client.post(f"/approvals/{form1['id']}/submit", headers={'Authorization': f'Bearer {t_admin}'})
+    assert resp.status_code == 200
+
+    # normal user creates a draft form
+    t_user = token(client, 'user', 'user')
+    resp = client.post('/approvals', json={'data': {'amount': 2}}, headers={'Authorization': f'Bearer {t_user}'})
+    assert resp.status_code == 201
+    form2 = resp.get_json()
+
+    # user should only see own form
+    resp = client.get('/approvals', headers={'Authorization': f'Bearer {t_user}'})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert [f['id'] for f in data] == [form2['id']]
+
+    # admin sees both forms
+    resp = client.get('/approvals', headers={'Authorization': f'Bearer {t_admin}'})
+    assert resp.status_code == 200
+    ids = {f['id'] for f in resp.get_json()}
+    assert ids == {form1['id'], form2['id']}
+
+    # admin can filter by status
+    resp = client.get('/approvals?status=submitted', headers={'Authorization': f'Bearer {t_admin}'})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert [f['id'] for f in data] == [form1['id']]

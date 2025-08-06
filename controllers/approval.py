@@ -58,6 +58,24 @@ def _after_approval(form, result):
         form['status'] = 'rejected'
 
 
+@bp.get('')
+@authenticate_token
+def list_forms():
+    """Return approval forms visible to the current user.
+
+    Regular users only see forms they created while admins can view
+    all forms.  A ``status`` query parameter can optionally filter
+    the result set.
+    """
+    forms = approval_forms
+    if request.user.get('role') != 'admin':
+        forms = [f for f in forms if f['applicant_id'] == request.user['id']]
+    status = request.args.get('status')
+    if status:
+        forms = [f for f in forms if f.get('status') == status]
+    return jsonify(forms)
+
+
 @bp.post('')
 @authenticate_token
 def create_form():
