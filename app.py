@@ -5,7 +5,8 @@ if not hasattr(werkzeug, "__version__"):
 from flask import Flask, request, jsonify
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
-from controllers.approval import bp as approval_bp, reset_data as reset_approval_data
+from controllers import approval, verification
+from controllers.approval import bp as approval_bp
 from controllers.verification import bp as verification_bp
 from controllers.statistics import bp as statistics_bp
 
@@ -16,14 +17,16 @@ app.register_blueprint(statistics_bp)
 
 
 def reset_data():
-    global organizations, departments, users
+    global organizations, departments, users, templates
     organizations = [{'id': 1, 'name': 'Org1'}]
     departments = [{'id': 1, 'name': 'Dept1', 'org_id': 1}]
     users = [
         {'id': 1, 'username': 'admin', 'password': 'admin', 'role': 'admin', 'org_id': 1, 'dept_id': 1},
         {'id': 2, 'username': 'user', 'password': 'user', 'role': 'user', 'org_id': 1, 'dept_id': 1}
     ]
-    reset_approval_data()
+    templates = []
+    approval.reset_data()
+    verification.reset_data()
 
 
 reset_data()
@@ -156,6 +159,70 @@ def update_dept(dept_id):
 def delete_dept(dept_id):
     global departments
     departments = [d for d in departments if d['id'] != dept_id]
+    return '', 204
+
+
+@app.get('/admin/templates')
+@authenticate_token
+@authorize_roles('admin')
+def list_templates():
+    return jsonify(templates)
+
+
+@app.post('/admin/templates')
+@authenticate_token
+@authorize_roles('admin')
+def create_template():
+    tpl = request.get_json() or {}
+    tpl['id'] = len(templates) + 1
+    templates.append(tpl)
+    return jsonify(tpl), 201
+
+
+@app.put('/admin/templates/<int:template_id>')
+@authenticate_token
+@authorize_roles('admin')
+def update_template(template_id):
+    tpl = next((t for t in templates if t['id'] == template_id), None)
+    if not tpl:
+        return '', 404
+    tpl.update(request.get_json() or {})
+    return jsonify(tpl)
+
+
+@app.delete('/admin/templates/<int:template_id>')
+@authenticate_token
+@authorize_roles('admin')
+def delete_template(template_id):
+    global templates
+    templates = [t for t in templates if t['id'] != template_id]
+    return '', 204
+
+
+@app.get('/admin/verifiers')
+@authenticate_token
+@authorize_roles('admin')
+def list_verifiers():
+    return jsonify(sorted(verification.authorized_verifiers))
+
+
+@app.post('/admin/verifiers')
+@authenticate_token
+@authorize_roles('admin')
+def add_verifier():
+    data = request.get_json() or {}
+    uid = data.get('user_id')
+    if uid is None:
+        return '', 400
+    verification.authorized_verifiers.add(uid)
+    return jsonify({'user_id': uid}), 201
+
+
+@app.delete('/admin/verifiers/<int:user_id>')
+@authenticate_token
+@authorize_roles('admin')
+def remove_verifier(user_id):
+    verification.authorized_verifiers.discard(user_id)
     return '', 204
 
 

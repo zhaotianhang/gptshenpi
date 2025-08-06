@@ -8,6 +8,17 @@ from . import approval
 bp = Blueprint('verification', __name__, url_prefix='/verification')
 
 
+authorized_verifiers = set()
+
+
+def reset_data():
+    global authorized_verifiers
+    authorized_verifiers = {1}  # admin can verify by default
+
+
+reset_data()
+
+
 def _find_form_by_code(code):
     return next((f for f in approval.approval_forms if f.get('code') == code), None)
 
@@ -31,6 +42,8 @@ def verify_form(code):
     form = _find_form_by_code(code)
     if not form:
         return '', 404
+    if request.user['id'] not in authorized_verifiers:
+        return '', 403
     payload = request.get_json() or {}
     result = payload.get('result', 'verified')
     comments = payload.get('comments')
