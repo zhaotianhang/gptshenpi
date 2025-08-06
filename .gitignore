@@ -1,2 +1,5 @@
 __pycache__/
 qr_codes/
+
+frontend/node_modules/
+frontend/package-lock.json
