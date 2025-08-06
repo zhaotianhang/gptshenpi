@@ -88,6 +88,21 @@ def test_admin_can_manage_verifiers():
     assert resp.status_code == 204
 
 
+def test_admin_can_manage_orgs_and_depts():
+    client = app.test_client()
+    t = token(client, 'admin', 'admin')
+    resp = client.post('/admin/orgs', json={'name': 'O2'}, headers={'Authorization': f'Bearer {t}'})
+    assert resp.status_code == 201
+    resp = client.get('/admin/orgs', headers={'Authorization': f'Bearer {t}'})
+    assert resp.status_code == 200
+    assert any(o['name'] == 'O2' for o in resp.get_json())
+    resp = client.post('/admin/depts', json={'name': 'D2', 'org_id': 1}, headers={'Authorization': f'Bearer {t}'})
+    assert resp.status_code == 201
+    resp = client.get('/admin/depts', headers={'Authorization': f'Bearer {t}'})
+    assert resp.status_code == 200
+    assert any(d['name'] == 'D2' for d in resp.get_json())
+
+
 def test_user_cannot_create_template():
     client = app.test_client()
     t = token(client, 'user', 'user')

@@ -2,7 +2,7 @@ import werkzeug
 if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3"
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
 from controllers import approval, verification
@@ -14,6 +14,11 @@ app = Flask(__name__)
 app.register_blueprint(approval_bp)
 app.register_blueprint(verification_bp)
 app.register_blueprint(statistics_bp)
+
+
+@app.get('/admin')
+def admin_page():
+    return send_from_directory('static', 'admin.html')
 
 
 def reset_data():
@@ -102,6 +107,13 @@ def delete_user(user_id):
     return '', 204
 
 
+@app.get('/admin/orgs')
+@authenticate_token
+@authorize_roles('admin')
+def list_orgs():
+    return jsonify(organizations)
+
+
 @app.post('/admin/orgs')
 @authenticate_token
 @authorize_roles('admin')
@@ -130,6 +142,13 @@ def delete_org(org_id):
     global organizations
     organizations = [o for o in organizations if o['id'] != org_id]
     return '', 204
+
+
+@app.get('/admin/depts')
+@authenticate_token
+@authorize_roles('admin')
+def list_depts():
+    return jsonify(departments)
 
 
 @app.post('/admin/depts')
