@@ -2,13 +2,14 @@ import os
 import pytest
 
 from app import app, reset_data
-from controllers import approval
+from controllers import approval, verification
 
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
     reset_data()
     approval.reset_data()
+    verification.reset_data()
     yield
 
 
@@ -43,3 +44,17 @@ def test_qr_code_and_verification_flow():
     assert record['verifier_id'] == 1
     assert record['verified_at']
     assert approval.verification_records[0]['status'] == 'verified'
+
+
+def test_verification_requires_authorized_user():
+    client = app.test_client()
+    t_admin = token(client, 'admin', 'admin')
+    resp = client.post('/approvals', json={'data': {'a': 1}}, headers={'Authorization': f'Bearer {t_admin}'})
+    code = resp.get_json()['code']
+    t_user = token(client, 'user', 'user')
+    resp = client.post(f'/verification/{code}', json={}, headers={'Authorization': f'Bearer {t_user}'})
+    assert resp.status_code == 403
+    client.post('/admin/verifiers', json={'user_id': 2}, headers={'Authorization': f'Bearer {t_admin}'})
+    resp = client.post(f'/verification/{code}', json={}, headers={'Authorization': f'Bearer {t_user}'})
+    assert resp.status_code == 200
+    assert resp.get_json()['verifier_id'] == 2
