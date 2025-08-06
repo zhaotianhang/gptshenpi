@@ -14,6 +14,9 @@ class SubmissionRecord(TimestampMixin, Base):
 
     form = relationship("ApprovalForm", back_populates="submission_records")
     submitter = relationship("User", back_populates="submission_records")
+    approval_records = relationship(
+        "ApprovalRecord", back_populates="submission_record", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_submission_form", "form_id"),
