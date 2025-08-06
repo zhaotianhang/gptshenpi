@@ -1,4 +1,11 @@
 from datetime import datetime
+import os
+
+try:
+    import qrcode
+except Exception:  # pragma: no cover - fallback if qrcode isn't installed
+    qrcode = None
+
 from flask import Blueprint, jsonify, request
 
 from middleware.auth import authenticate_token
@@ -66,6 +73,17 @@ def create_form():
         'submitted_at': None,
         'code': f'APP{_next_code:06d}'
     }
+    # generate QR code and save path
+    os.makedirs('qr_codes', exist_ok=True)
+    qr_path = os.path.join('qr_codes', f"{form['code']}.png")
+    if qrcode:
+        img = qrcode.make(form['code'])
+        img.save(qr_path)
+    else:  # fallback: create placeholder file
+        with open(qr_path, 'wb') as f:  # pragma: no cover
+            f.write(b'')
+    form['qr_code_path'] = qr_path
+
     approval_forms.append(form)
     _next_id += 1
     _next_code += 1

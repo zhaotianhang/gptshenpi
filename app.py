@@ -6,9 +6,11 @@ from flask import Flask, request, jsonify
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
 from controllers.approval import bp as approval_bp, reset_data as reset_approval_data
+from controllers.verification import bp as verification_bp
 
 app = Flask(__name__)
 app.register_blueprint(approval_bp)
+app.register_blueprint(verification_bp)
 
 
 def reset_data():
