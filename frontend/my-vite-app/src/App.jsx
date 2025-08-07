@@ -62,12 +62,13 @@ function ApprovalList() {
 function NewApproval() {
   const [title, setTitle] = React.useState('');
   const [content, setContent] = React.useState('');
+  const [templateId, setTemplateId] = React.useState('');
   const navigate = useNavigate();
   async function submit(e) {
     e.preventDefault();
     const res = await apiFetch('/approvals', {
       method: 'POST',
-      body: JSON.stringify({ title, content })
+      body: JSON.stringify({ title, content, template_id: parseInt(templateId) })
     });
     if (res.ok) navigate('/approvals');
   }
@@ -77,6 +78,7 @@ function NewApproval() {
       <form onSubmit={submit}>
         <input placeholder="标题" value={title} onChange={e => setTitle(e.target.value)} />
         <textarea placeholder="内容" value={content} onChange={e => setContent(e.target.value)} />
+        <input placeholder="模板ID" value={templateId} onChange={e => setTemplateId(e.target.value)} />
         <button type="submit">提交</button>
       </form>
     </div>
@@ -86,17 +88,19 @@ function NewApproval() {
 function ApprovalProcess() {
   const { id } = useParams();
   const [item, setItem] = React.useState(null);
+  const [comments, setComments] = React.useState('');
+  const [attachments, setAttachments] = React.useState('');
   React.useEffect(() => {
     apiFetch(`/approvals/${id}`).then(async res => {
       if (res.ok) setItem(await res.json());
     });
   }, [id]);
-  async function action(decision) {
-    const res = await apiFetch(`/approvals/${id}`, {
+  async function action(path) {
+    const res = await apiFetch(`/approvals/${id}/${path}`, {
       method: 'POST',
-      body: JSON.stringify({ decision })
+      body: JSON.stringify({ comments, attachments: attachments.split(',').map(s=>s.trim()).filter(Boolean) })
     });
-    if (res.ok) window.history.back();
+    if (res.ok) setItem(await res.json());
   }
   if (!item) return <div>加载中...</div>;
   return (
@@ -104,8 +108,17 @@ function ApprovalProcess() {
       <h2>审批处理</h2>
       <div>{item.title}</div>
       <div>{item.content}</div>
-      <button onClick={() => action('approved')}>通过</button>
-      <button onClick={() => action('rejected')}>拒绝</button>
+      {item.workflow && (
+        <ul>
+          {item.workflow.flow.map(n => (
+            <li key={n.id}>{n.id} - {n.status}</li>
+          ))}
+        </ul>
+      )}
+      <textarea placeholder="备注" value={comments} onChange={e=>setComments(e.target.value)} />
+      <input placeholder="附件,以逗号分隔" value={attachments} onChange={e=>setAttachments(e.target.value)} />
+      <button onClick={() => action('approve')}>通过</button>
+      <button onClick={() => action('reject')}>拒绝</button>
     </div>
   );
 }

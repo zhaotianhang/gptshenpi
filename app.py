@@ -25,14 +25,13 @@ def admin_page():
 
 
 def reset_data():
-    global organizations, departments, users, templates
+    global organizations, departments, users
     organizations = [{'id': 1, 'name': 'Org1'}]
     departments = [{'id': 1, 'name': 'Dept1', 'org_id': 1}]
     users = [
         {'id': 1, 'username': 'admin', 'password': 'admin', 'role': 'admin', 'org_id': 1, 'dept_id': 1},
         {'id': 2, 'username': 'user', 'password': 'user', 'role': 'user', 'org_id': 1, 'dept_id': 1}
     ]
-    templates = []
     approval.reset_data()
     verification.reset_data()
 
@@ -188,7 +187,7 @@ def delete_dept(dept_id):
 @authenticate_token
 @authorize_roles('admin')
 def list_templates():
-    return jsonify(templates)
+    return jsonify(approval.workflow_templates)
 
 
 @app.post('/admin/templates')
@@ -196,8 +195,8 @@ def list_templates():
 @authorize_roles('admin')
 def create_template():
     tpl = request.get_json() or {}
-    tpl['id'] = len(templates) + 1
-    templates.append(tpl)
+    tpl['id'] = len(approval.workflow_templates) + 1
+    approval.workflow_templates.append(tpl)
     return jsonify(tpl), 201
 
 
@@ -205,7 +204,7 @@ def create_template():
 @authenticate_token
 @authorize_roles('admin')
 def update_template(template_id):
-    tpl = next((t for t in templates if t['id'] == template_id), None)
+    tpl = next((t for t in approval.workflow_templates if t['id'] == template_id), None)
     if not tpl:
         return '', 404
     tpl.update(request.get_json() or {})
@@ -216,8 +215,7 @@ def update_template(template_id):
 @authenticate_token
 @authorize_roles('admin')
 def delete_template(template_id):
-    global templates
-    templates = [t for t in templates if t['id'] != template_id]
+    approval.workflow_templates = [t for t in approval.workflow_templates if t['id'] != template_id]
     return '', 204
 
 
