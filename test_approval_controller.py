@@ -134,3 +134,50 @@ def test_list_forms_by_user_and_status():
     assert resp.status_code == 200
     data = resp.get_json()
     assert [f['id'] for f in data] == [form1['id']]
+
+
+def test_workflow_execution_flow():
+    client = app.test_client()
+    t = token(client)
+    # setup template with two approval nodes
+    approval.workflow_templates.append({
+        'id': 1,
+        'name': 'two-step',
+        'steps': [
+            {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
+            {'id': 'n2', 'type': 'approval', 'approvers': [1]},
+        ],
+    })
+    # create form using template
+    resp = client.post(
+        '/approvals',
+        json={'data': {'a': 1}, 'template_id': 1},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    assert resp.status_code == 201
+    form_id = resp.get_json()['id']
+    # submit form -> workflow starts
+    resp = client.post(f'/approvals/{form_id}/submit', headers={'Authorization': f'Bearer {t}'})
+    assert resp.status_code == 200
+    # fetch form to check flow state
+    resp = client.get(f'/approvals/{form_id}', headers={'Authorization': f'Bearer {t}'})
+    data = resp.get_json()
+    assert data['workflow']['flow'][0]['status'] == 'in_progress'
+    # approve first node
+    resp = client.post(
+        f'/approvals/{form_id}/approve',
+        json={},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['workflow']['flow'][0]['status'] == 'approved'
+    # approve second node -> completes workflow
+    resp = client.post(
+        f'/approvals/{form_id}/approve',
+        json={},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['workflow']['status'] == 'approved'

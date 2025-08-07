@@ -9,6 +9,7 @@ except Exception:  # pragma: no cover - fallback if qrcode isn't installed
 from flask import Blueprint, jsonify, request
 
 from middleware.auth import authenticate_token
+from workflow import Workflow, WorkflowInstance
 
 bp = Blueprint('approval', __name__, url_prefix='/approvals')
 
@@ -16,16 +17,21 @@ approval_forms = []
 submission_records = []
 approval_records = []
 verification_records = []
+workflow_templates = []
+workflow_instances = {}
 _next_id = 1
 _next_code = 1
 
 
 def reset_data():
-    global approval_forms, submission_records, approval_records, verification_records, _next_id, _next_code
+    global approval_forms, submission_records, approval_records, verification_records
+    global workflow_templates, workflow_instances, _next_id, _next_code
     approval_forms = []
     submission_records = []
     approval_records = []
     verification_records = []
+    workflow_templates = []
+    workflow_instances = {}
     _next_id = 1
     _next_code = 1
 
@@ -36,6 +42,10 @@ def _find_form(form_id):
 
 def _find_submission_record(form_id):
     return next((r for r in submission_records if r['form_id'] == form_id), None)
+
+
+def _find_template(template_id):
+    return next((t for t in workflow_templates if t['id'] == template_id), None)
 
 
 def _after_approval(form, result):
@@ -84,6 +94,7 @@ def create_form():
     form = {
         'id': _next_id,
         'data': payload.get('data', {}),
+        'template_id': payload.get('template_id'),
         'applicant_id': request.user['id'],
         'org_id': request.user.get('org_id'),
         'dept_id': request.user.get('dept_id'),
@@ -138,6 +149,12 @@ def submit_form(form_id):
         'submitted_at': now
     }
     submission_records.append(record)
+    tpl = _find_template(form.get('template_id'))
+    if tpl:
+        wf = Workflow.from_template(tpl.get('steps', []))
+        inst = WorkflowInstance(wf)
+        workflow_instances[form_id] = inst
+        form['status'] = 'in_progress'
     return jsonify(form)
 
 
@@ -157,11 +174,25 @@ def reject_form(form_id):
         'submission_id': sr['id'] if sr else None,
         'result': 'rejected',
         'comments': payload.get('comments'),
+        'attachments': payload.get('attachments', []),
         'acted_at': now,
     }
     approval_records.append(record)
-    _after_approval(form, 'rejected')
-    return jsonify(form)
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='rejected',
+            comments=payload.get('comments'),
+            attachments=payload.get('attachments'),
+        )
+        form['status'] = inst.status
+    else:
+        _after_approval(form, 'rejected')
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
+    return jsonify(resp)
 
 
 @bp.post('/<int:form_id>/approve')
@@ -180,8 +211,35 @@ def approve_form(form_id):
         'submission_id': sr['id'] if sr else None,
         'result': 'approved',
         'comments': payload.get('comments'),
+        'attachments': payload.get('attachments', []),
         'acted_at': now,
     }
     approval_records.append(record)
-    _after_approval(form, 'approved')
-    return jsonify(form)
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='approved',
+            comments=payload.get('comments'),
+            attachments=payload.get('attachments'),
+        )
+        form['status'] = inst.status if inst.status != 'pending' else 'in_progress'
+    else:
+        _after_approval(form, 'approved')
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
+    return jsonify(resp)
+
+
+@bp.get('/<int:form_id>')
+@authenticate_token
+def get_form(form_id):
+    form = _find_form(form_id)
+    if not form:
+        return '', 404
+    inst = workflow_instances.get(form_id)
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
+    return jsonify(resp)
