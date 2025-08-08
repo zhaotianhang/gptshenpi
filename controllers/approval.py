@@ -9,31 +9,33 @@ except Exception:  # pragma: no cover - fallback if qrcode isn't installed
 from flask import Blueprint, jsonify, request
 
 from middleware.auth import authenticate_token
-from workflow import Workflow, WorkflowInstance
+import storage
 
 bp = Blueprint('approval', __name__, url_prefix='/approvals')
 
-approval_forms = []
-submission_records = []
-approval_records = []
-verification_records = []
-workflow_templates = []
-workflow_instances = {}
-_next_id = 1
-_next_code = 1
+data = storage.data()
+
+
+def _refresh_refs():
+    global approval_forms, submission_records, approval_records, verification_records
+    approval_forms = data.setdefault('approval_forms', [])
+    submission_records = data.setdefault('submission_records', [])
+    approval_records = data.setdefault('approval_records', [])
+    verification_records = data.setdefault('verification_records', [])
 
 
 def reset_data():
-    global approval_forms, submission_records, approval_records, verification_records
-    global workflow_templates, workflow_instances, _next_id, _next_code
-    approval_forms = []
-    submission_records = []
-    approval_records = []
-    verification_records = []
-    workflow_templates = []
-    workflow_instances = {}
-    _next_id = 1
-    _next_code = 1
+    data['approval_forms'] = []
+    data['submission_records'] = []
+    data['approval_records'] = []
+    data['verification_records'] = []
+    data['next_id'] = 1
+    data['next_code'] = 1
+    _refresh_refs()
+    storage.save()
+
+
+_refresh_refs()
 
 
 def _find_form(form_id):
@@ -66,6 +68,7 @@ def _after_approval(form, result):
             form['status'] = 'approved'
     else:
         form['status'] = 'rejected'
+    storage.save()
 
 
 @bp.get('')
@@ -105,10 +108,9 @@ def list_forms():
 @bp.post('')
 @authenticate_token
 def create_form():
-    global _next_id, _next_code
     payload = request.get_json() or {}
     form = {
-        'id': _next_id,
+        'id': data['next_id'],
         'data': payload.get('data', {}),
         'template_id': payload.get('template_id'),
         'applicant_id': request.user['id'],
@@ -116,7 +118,7 @@ def create_form():
         'dept_id': request.user.get('dept_id'),
         'status': 'draft',
         'submitted_at': None,
-        'code': f'APP{_next_code:06d}'
+        'code': f"APP{data['next_code']:06d}"
     }
     # generate QR code and save path
     os.makedirs('qr_codes', exist_ok=True)
@@ -130,8 +132,9 @@ def create_form():
     form['qr_code_path'] = qr_path
 
     approval_forms.append(form)
-    _next_id += 1
-    _next_code += 1
+    data['next_id'] += 1
+    data['next_code'] += 1
+    storage.save()
     return jsonify(form), 201
 
 
@@ -146,6 +149,7 @@ def update_form(form_id):
     payload = request.get_json() or {}
     if 'data' in payload:
         form['data'] = payload['data']
+    storage.save()
     return jsonify(form)
 
 
@@ -171,6 +175,7 @@ def submit_form(form_id):
         inst = WorkflowInstance(wf)
         workflow_instances[form_id] = inst
         form['status'] = 'in_progress'
+    storage.save()
     return jsonify(form)
 
 
@@ -208,6 +213,7 @@ def reject_form(form_id):
     resp = dict(form)
     if inst:
         resp['workflow'] = inst.to_dict()
+    storage.save()
     return jsonify(resp)
 
 
@@ -245,6 +251,7 @@ def approve_form(form_id):
     resp = dict(form)
     if inst:
         resp['workflow'] = inst.to_dict()
+    storage.save()
     return jsonify(resp)
 
 
