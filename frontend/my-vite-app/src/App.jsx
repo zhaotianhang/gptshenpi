@@ -9,6 +9,16 @@ function apiFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
+function currentUser() {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+}
+
 function Login() {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -37,21 +47,41 @@ function Login() {
   );
 }
 
-function ApprovalList() {
+function MyApplicationsList() {
   const [items, setItems] = React.useState([]);
   React.useEffect(() => {
-    apiFetch('/approvals').then(async res => {
+    apiFetch('/approvals?scope=applicant').then(async res => {
       if (res.ok) setItems(await res.json());
     });
   }, []);
   return (
     <div>
-      <h2>审批单列表</h2>
-      <Link to="/new">发起审批</Link>
+      <h2>我的申请</h2>
       <ul>
         {items.map(item => (
           <li key={item.id}>
-            {item.title} - {item.status} <Link to={`/process/${item.id}`}>处理</Link>
+            {item.code} - {item.status} <Link to={`/approvals/${item.id}`}>详情</Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MyApprovalsList() {
+  const [items, setItems] = React.useState([]);
+  React.useEffect(() => {
+    apiFetch('/approvals?scope=actor').then(async res => {
+      if (res.ok) setItems(await res.json());
+    });
+  }, []);
+  return (
+    <div>
+      <h2>我的审批</h2>
+      <ul>
+        {items.map(item => (
+          <li key={item.id}>
+            {item.code} - {item.status} <Link to={`/approvals/${item.id}`}>详情</Link>
           </li>
         ))}
       </ul>
@@ -62,13 +92,19 @@ function ApprovalList() {
 function NewApproval() {
   const [title, setTitle] = React.useState('');
   const [content, setContent] = React.useState('');
+  const [remark, setRemark] = React.useState('');
+  const [attachments, setAttachments] = React.useState([]);
   const [templateId, setTemplateId] = React.useState('');
   const navigate = useNavigate();
+  function handleFiles(e) {
+    setAttachments(Array.from(e.target.files).map(f => f.name));
+  }
   async function submit(e) {
     e.preventDefault();
+    const data = { title, content, remark, attachments };
     const res = await apiFetch('/approvals', {
       method: 'POST',
-      body: JSON.stringify({ title, content, template_id: parseInt(templateId) })
+      body: JSON.stringify({ data, template_id: parseInt(templateId) })
     });
     if (res.ok) navigate('/approvals');
   }
@@ -78,36 +114,102 @@ function NewApproval() {
       <form onSubmit={submit}>
         <input placeholder="标题" value={title} onChange={e => setTitle(e.target.value)} />
         <textarea placeholder="内容" value={content} onChange={e => setContent(e.target.value)} />
+        <textarea placeholder="备注" value={remark} onChange={e => setRemark(e.target.value)} />
+        <input type="file" multiple onChange={handleFiles} />
         <input placeholder="模板ID" value={templateId} onChange={e => setTemplateId(e.target.value)} />
-        <button type="submit">提交</button>
+        <button type="submit">保存</button>
       </form>
     </div>
   );
 }
 
-function ApprovalProcess() {
+function EditApproval() {
+  const { id } = useParams();
+  const [title, setTitle] = React.useState('');
+  const [content, setContent] = React.useState('');
+  const [remark, setRemark] = React.useState('');
+  const [attachments, setAttachments] = React.useState([]);
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    apiFetch(`/approvals/${id}`).then(async res => {
+      if (res.ok) {
+        const item = await res.json();
+        setTitle(item.data.title || '');
+        setContent(item.data.content || '');
+        setRemark(item.data.remark || '');
+        setAttachments(item.data.attachments || []);
+      }
+    });
+  }, [id]);
+  function handleFiles(e) {
+    setAttachments(Array.from(e.target.files).map(f => f.name));
+  }
+  async function submit(e) {
+    e.preventDefault();
+    const data = { title, content, remark, attachments };
+    const res = await apiFetch(`/approvals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ data })
+    });
+    if (res.ok) navigate(`/approvals/${id}`);
+  }
+  return (
+    <div>
+      <h2>编辑审批</h2>
+      <form onSubmit={submit}>
+        <input placeholder="标题" value={title} onChange={e => setTitle(e.target.value)} />
+        <textarea placeholder="内容" value={content} onChange={e => setContent(e.target.value)} />
+        <textarea placeholder="备注" value={remark} onChange={e => setRemark(e.target.value)} />
+        <input type="file" multiple onChange={handleFiles} />
+        <button type="submit">保存</button>
+      </form>
+    </div>
+  );
+}
+
+function ApprovalDetail() {
   const { id } = useParams();
   const [item, setItem] = React.useState(null);
   const [comments, setComments] = React.useState('');
-  const [attachments, setAttachments] = React.useState('');
+  const [files, setFiles] = React.useState([]);
+  const navigate = useNavigate();
+  const user = currentUser();
   React.useEffect(() => {
     apiFetch(`/approvals/${id}`).then(async res => {
       if (res.ok) setItem(await res.json());
     });
   }, [id]);
+  function handleFiles(e) {
+    setFiles(Array.from(e.target.files).map(f => f.name));
+  }
   async function action(path) {
     const res = await apiFetch(`/approvals/${id}/${path}`, {
       method: 'POST',
-      body: JSON.stringify({ comments, attachments: attachments.split(',').map(s=>s.trim()).filter(Boolean) })
+      body: JSON.stringify({ comments, attachments: files })
     });
     if (res.ok) setItem(await res.json());
   }
+  async function resubmit() {
+    const res = await apiFetch(`/approvals/${id}/submit`, { method: 'POST' });
+    if (res.ok) setItem(await res.json());
+  }
   if (!item) return <div>加载中...</div>;
+  const canEdit = user && user.id === item.applicant_id && (item.status === 'draft' || item.status === 'rejected');
   return (
     <div>
-      <h2>审批处理</h2>
-      <div>{item.title}</div>
-      <div>{item.content}</div>
+      <h2>审批详情</h2>
+      <div>编号: {item.code}</div>
+      <div>状态: {item.status}</div>
+      <div>标题: {item.data.title}</div>
+      <div>内容: {item.data.content}</div>
+      <div>备注: {item.data.remark}</div>
+      {item.data.attachments && item.data.attachments.length > 0 && (
+        <ul>
+          {item.data.attachments.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      )}
       {item.workflow && (
         <ul>
           {item.workflow.flow.map(n => (
@@ -115,10 +217,12 @@ function ApprovalProcess() {
           ))}
         </ul>
       )}
-      <textarea placeholder="备注" value={comments} onChange={e=>setComments(e.target.value)} />
-      <input placeholder="附件,以逗号分隔" value={attachments} onChange={e=>setAttachments(e.target.value)} />
+      <textarea placeholder="审批备注" value={comments} onChange={e => setComments(e.target.value)} />
+      <input type="file" multiple onChange={handleFiles} />
       <button onClick={() => action('approve')}>通过</button>
-      <button onClick={() => action('reject')}>拒绝</button>
+      <button onClick={() => action('reject')}>驳回</button>
+      {canEdit && <button onClick={() => navigate(`/approvals/${id}/edit`)}>编辑</button>}
+      {canEdit && <button onClick={resubmit}>重新提交</button>}
     </div>
   );
 }
@@ -160,16 +264,19 @@ function App() {
     <BrowserRouter>
       <nav>
         <Link to="/">登录</Link> |
-        <Link to="/approvals">审批单列表</Link> |
+        <Link to="/approvals">我的申请</Link> |
+        <Link to="/tasks">我的审批</Link> |
         <Link to="/new">发起审批</Link> |
         <Link to="/scan">核查扫码</Link> |
         <Link to="/stats">统计查看</Link>
       </nav>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/approvals" element={<ApprovalList />} />
+        <Route path="/approvals" element={<MyApplicationsList />} />
+        <Route path="/tasks" element={<MyApprovalsList />} />
         <Route path="/new" element={<NewApproval />} />
-        <Route path="/process/:id" element={<ApprovalProcess />} />
+        <Route path="/approvals/:id" element={<ApprovalDetail />} />
+        <Route path="/approvals/:id/edit" element={<EditApproval />} />
         <Route path="/scan" element={<VerificationScan />} />
         <Route path="/stats" element={<StatisticsView />} />
       </Routes>
@@ -177,4 +284,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

@@ -73,13 +73,29 @@ def _after_approval(form, result):
 def list_forms():
     """Return approval forms visible to the current user.
 
-    Regular users only see forms they created while admins can view
-    all forms.  A ``status`` query parameter can optionally filter
-    the result set.
+    Regular users can request either forms they created or forms they
+    need to act on via the ``scope`` query parameter. Admins may view
+    all forms. A ``status`` query parameter can optionally filter the
+    result set.
     """
+    def _actor_forms(uid):
+        ids = {r['form_id'] for r in approval_records if r['approver_id'] == uid}
+        for fid, inst in workflow_instances.items():
+            node = inst.current_node()
+            if node and (uid in node.approvers or uid in node.delegates):
+                ids.add(fid)
+        return [f for f in approval_forms if f['id'] in ids]
+
+    scope = request.args.get('scope')
     forms = approval_forms
-    if request.user.get('role') != 'admin':
-        forms = [f for f in forms if f['applicant_id'] == request.user['id']]
+    if request.user.get('role') == 'admin':
+        if scope == 'actor':
+            forms = _actor_forms(request.user['id'])
+    else:
+        if scope == 'actor':
+            forms = _actor_forms(request.user['id'])
+        else:
+            forms = [f for f in forms if f['applicant_id'] == request.user['id']]
     status = request.args.get('status')
     if status:
         forms = [f for f in forms if f.get('status') == status]
@@ -125,7 +141,7 @@ def update_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
-    if form['applicant_id'] != request.user['id'] or form['status'] != 'draft':
+    if form['applicant_id'] != request.user['id'] or form['status'] not in ('draft', 'rejected'):
         return '', 403
     payload = request.get_json() or {}
     if 'data' in payload:
