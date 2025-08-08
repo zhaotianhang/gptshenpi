@@ -4,8 +4,28 @@ from flask import Blueprint, jsonify, request
 
 from middleware.auth import authenticate_token
 from . import approval
+import storage
 
 bp = Blueprint('verification', __name__, url_prefix='/verification')
+
+data = storage.data()
+
+
+# set of user IDs allowed to verify forms
+authorized_verifiers = set()
+
+def _refresh_verifiers():
+    global authorized_verifiers
+    authorized_verifiers = set(data.get('authorized_verifiers', []))
+
+
+def reset_data():
+    data['authorized_verifiers'] = [1]
+    _refresh_verifiers()
+    storage.save()
+
+
+_refresh_verifiers()
 
 
 def _find_form_by_code(code):
@@ -31,6 +51,8 @@ def verify_form(code):
     form = _find_form_by_code(code)
     if not form:
         return '', 404
+    if request.user['id'] not in authorized_verifiers:
+        return '', 403
     payload = request.get_json() or {}
     result = payload.get('result', 'verified')
     comments = payload.get('comments')
@@ -59,5 +81,5 @@ def verify_form(code):
     form['verified_at'] = now
     form['verifier_id'] = request.user['id']
     form['verification_comments'] = comments
-
+    storage.save()
     return jsonify(record)

@@ -2,37 +2,45 @@ import werkzeug
 if not hasattr(werkzeug, "__version__"):
     werkzeug.__version__ = "3"
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 from middleware.auth import generate_token, authenticate_token, authorize_roles
-from controllers.approval import bp as approval_bp, reset_data as reset_approval_data
+from controllers import approval, verification
+from controllers.approval import bp as approval_bp
 from controllers.verification import bp as verification_bp
 from controllers.statistics import bp as statistics_bp
+import storage
 
 app = Flask(__name__)
 app.register_blueprint(approval_bp)
 app.register_blueprint(verification_bp)
 app.register_blueprint(statistics_bp)
 
+storage.init_defaults()
+data = storage.data()
+
+
+@app.get('/admin')
+def admin_page():
+    return send_from_directory('static', 'admin.html')
+
 
 def reset_data():
-    global organizations, departments, users
-    organizations = [{'id': 1, 'name': 'Org1'}]
-    departments = [{'id': 1, 'name': 'Dept1', 'org_id': 1}]
-    users = [
+    data['organizations'] = [{'id': 1, 'name': 'Org1'}]
+    data['departments'] = [{'id': 1, 'name': 'Dept1', 'org_id': 1}]
+    data['users'] = [
         {'id': 1, 'username': 'admin', 'password': 'admin', 'role': 'admin', 'org_id': 1, 'dept_id': 1},
         {'id': 2, 'username': 'user', 'password': 'user', 'role': 'user', 'org_id': 1, 'dept_id': 1}
     ]
-    reset_approval_data()
-
-
-reset_data()
-
+    data['templates'] = []
+    approval.reset_data()
+    verification.reset_data()
+    storage.save()
 
 @app.post('/login')
 def login():
-    data = request.get_json() or {}
-    user = next((u for u in users if u['username'] == data.get('username') and u['password'] == data.get('password')), None)
+    payload = request.get_json() or {}
+    user = next((u for u in data['users'] if u['username'] == payload.get('username') and u['password'] == payload.get('password')), None)
     if not user:
         return '', 401
     token = generate_token(user)
@@ -44,7 +52,7 @@ def login():
 def get_user(user_id):
     if request.user['role'] != 'admin' and request.user['id'] != user_id:
         return '', 403
-    user = next((u for u in users if u['id'] == user_id), None)
+    user = next((u for u in data['users'] if u['id'] == user_id), None)
     if not user:
         return '', 404
     return jsonify(user)
@@ -55,10 +63,11 @@ def get_user(user_id):
 def update_user(user_id):
     if request.user['role'] != 'admin' and request.user['id'] != user_id:
         return '', 403
-    user = next((u for u in users if u['id'] == user_id), None)
+    user = next((u for u in data['users'] if u['id'] == user_id), None)
     if not user:
         return '', 404
     user.update(request.get_json() or {})
+    storage.save()
     return jsonify(user)
 
 
@@ -66,7 +75,7 @@ def update_user(user_id):
 @authenticate_token
 @authorize_roles('admin')
 def list_users():
-    return jsonify(users)
+    return jsonify(data['users'])
 
 
 @app.post('/admin/users')
@@ -74,8 +83,9 @@ def list_users():
 @authorize_roles('admin')
 def create_user():
     new_user = request.get_json() or {}
-    new_user['id'] = len(users) + 1
-    users.append(new_user)
+    new_user['id'] = max([u['id'] for u in data['users']], default=0) + 1
+    data['users'].append(new_user)
+    storage.save()
     return jsonify(new_user), 201
 
 
@@ -83,10 +93,11 @@ def create_user():
 @authenticate_token
 @authorize_roles('admin')
 def admin_update_user(user_id):
-    user = next((u for u in users if u['id'] == user_id), None)
+    user = next((u for u in data['users'] if u['id'] == user_id), None)
     if not user:
         return '', 404
     user.update(request.get_json() or {})
+    storage.save()
     return jsonify(user)
 
 
@@ -94,9 +105,16 @@ def admin_update_user(user_id):
 @authenticate_token
 @authorize_roles('admin')
 def delete_user(user_id):
-    global users
-    users = [u for u in users if u['id'] != user_id]
+    data['users'] = [u for u in data['users'] if u['id'] != user_id]
+    storage.save()
     return '', 204
+
+
+@app.get('/admin/orgs')
+@authenticate_token
+@authorize_roles('admin')
+def list_orgs():
+    return jsonify(data['organizations'])
 
 
 @app.post('/admin/orgs')
@@ -104,8 +122,9 @@ def delete_user(user_id):
 @authorize_roles('admin')
 def create_org():
     org = request.get_json() or {}
-    org['id'] = len(organizations) + 1
-    organizations.append(org)
+    org['id'] = max([o['id'] for o in data['organizations']], default=0) + 1
+    data['organizations'].append(org)
+    storage.save()
     return jsonify(org), 201
 
 
@@ -113,10 +132,11 @@ def create_org():
 @authenticate_token
 @authorize_roles('admin')
 def update_org(org_id):
-    org = next((o for o in organizations if o['id'] == org_id), None)
+    org = next((o for o in data['organizations'] if o['id'] == org_id), None)
     if not org:
         return '', 404
     org.update(request.get_json() or {})
+    storage.save()
     return jsonify(org)
 
 
@@ -124,9 +144,16 @@ def update_org(org_id):
 @authenticate_token
 @authorize_roles('admin')
 def delete_org(org_id):
-    global organizations
-    organizations = [o for o in organizations if o['id'] != org_id]
+    data['organizations'] = [o for o in data['organizations'] if o['id'] != org_id]
+    storage.save()
     return '', 204
+
+
+@app.get('/admin/depts')
+@authenticate_token
+@authorize_roles('admin')
+def list_depts():
+    return jsonify(data['departments'])
 
 
 @app.post('/admin/depts')
@@ -134,8 +161,9 @@ def delete_org(org_id):
 @authorize_roles('admin')
 def create_dept():
     dept = request.get_json() or {}
-    dept['id'] = len(departments) + 1
-    departments.append(dept)
+    dept['id'] = max([d['id'] for d in data['departments']], default=0) + 1
+    data['departments'].append(dept)
+    storage.save()
     return jsonify(dept), 201
 
 
@@ -143,10 +171,11 @@ def create_dept():
 @authenticate_token
 @authorize_roles('admin')
 def update_dept(dept_id):
-    dept = next((d for d in departments if d['id'] == dept_id), None)
+    dept = next((d for d in data['departments'] if d['id'] == dept_id), None)
     if not dept:
         return '', 404
     dept.update(request.get_json() or {})
+    storage.save()
     return jsonify(dept)
 
 
@@ -154,8 +183,78 @@ def update_dept(dept_id):
 @authenticate_token
 @authorize_roles('admin')
 def delete_dept(dept_id):
-    global departments
-    departments = [d for d in departments if d['id'] != dept_id]
+    data['departments'] = [d for d in data['departments'] if d['id'] != dept_id]
+    storage.save()
+    return '', 204
+
+
+@app.get('/admin/templates')
+@authenticate_token
+@authorize_roles('admin')
+def list_templates():
+    return jsonify(data['templates'])
+
+
+@app.post('/admin/templates')
+@authenticate_token
+@authorize_roles('admin')
+def create_template():
+    tpl = request.get_json() or {}
+    tpl['id'] = max([t['id'] for t in data['templates']], default=0) + 1
+    data['templates'].append(tpl)
+    storage.save()
+    return jsonify(tpl), 201
+
+
+@app.put('/admin/templates/<int:template_id>')
+@authenticate_token
+@authorize_roles('admin')
+def update_template(template_id):
+    tpl = next((t for t in data['templates'] if t['id'] == template_id), None)
+    if not tpl:
+        return '', 404
+    tpl.update(request.get_json() or {})
+    storage.save()
+    return jsonify(tpl)
+
+
+@app.delete('/admin/templates/<int:template_id>')
+@authenticate_token
+@authorize_roles('admin')
+def delete_template(template_id):
+    data['templates'] = [t for t in data['templates'] if t['id'] != template_id]
+    storage.save()
+    return '', 204
+
+
+@app.get('/admin/verifiers')
+@authenticate_token
+@authorize_roles('admin')
+def list_verifiers():
+    return jsonify(sorted(verification.authorized_verifiers))
+
+
+@app.post('/admin/verifiers')
+@authenticate_token
+@authorize_roles('admin')
+def add_verifier():
+    payload = request.get_json() or {}
+    uid = payload.get('user_id')
+    if uid is None:
+        return '', 400
+    verification.authorized_verifiers.add(uid)
+    data['authorized_verifiers'] = sorted(verification.authorized_verifiers)
+    storage.save()
+    return jsonify({'user_id': uid}), 201
+
+
+@app.delete('/admin/verifiers/<int:user_id>')
+@authenticate_token
+@authorize_roles('admin')
+def remove_verifier(user_id):
+    verification.authorized_verifiers.discard(user_id)
+    data['authorized_verifiers'] = sorted(verification.authorized_verifiers)
+    storage.save()
     return '', 204
 
 

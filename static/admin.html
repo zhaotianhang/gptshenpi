@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <style>
+    body { font-family: sans-serif; }
+    section { margin-bottom: 1.5em; }
+    input { margin: 0.2em; }
+  </style>
+</head>
+<body>
+<h1>Admin Panel</h1>
+<section id="login">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username">
+  <input id="password" placeholder="Password" type="password">
+  <button onclick="login()">Login</button>
+</section>
+
+<section id="orgs" style="display:none;">
+  <h2>Organizations</h2>
+  <ul id="orgList"></ul>
+  <input id="orgName" placeholder="Name">
+  <button onclick="createOrg()">Create</button>
+</section>
+
+<section id="depts" style="display:none;">
+  <h2>Departments</h2>
+  <ul id="deptList"></ul>
+  <input id="deptName" placeholder="Name">
+  <input id="deptOrgId" placeholder="Org ID">
+  <button onclick="createDept()">Create</button>
+</section>
+
+<section id="users" style="display:none;">
+  <h2>Users</h2>
+  <ul id="userList"></ul>
+  <input id="userName" placeholder="Username">
+  <input id="userPass" placeholder="Password" type="password">
+  <input id="userRole" placeholder="Role">
+  <input id="userOrgId" placeholder="Org ID">
+  <input id="userDeptId" placeholder="Dept ID">
+  <button onclick="createUser()">Create</button>
+</section>
+
+<section id="templates" style="display:none;">
+  <h2>Templates</h2>
+  <ul id="tplList"></ul>
+  <input id="tplName" placeholder="Name">
+  <input id="tplVerifier" placeholder="Verifier ID">
+  <button onclick="createTpl()">Create</button>
+</section>
+
+<section id="verifiers" style="display:none;">
+  <h2>Verifiers</h2>
+  <ul id="verifierList"></ul>
+  <input id="verifierUserId" placeholder="User ID">
+  <button onclick="addVerifier()">Add</button>
+</section>
+
+<script>
+let token = '';
+function login(){
+  fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username: username.value, password: password.value})})
+  .then(r => {if(!r.ok) throw new Error('login failed'); return r.json();})
+  .then(data => {
+    token = data.token;
+    document.getElementById('login').style.display='none';
+    document.querySelectorAll('section:not(#login)').forEach(s=>s.style.display='block');
+    loadAll();
+  })
+  .catch(() => alert('Login failed'));
+}
+function auth(){ return { 'Authorization': 'Bearer '+token, 'Content-Type':'application/json' }; }
+function loadAll(){ loadOrgs(); loadDepts(); loadUsers(); loadTemplates(); loadVerifiers(); }
+
+function loadOrgs(){
+  fetch('/admin/orgs',{headers:auth()}).then(r=>r.json()).then(data=>{
+    orgList.innerHTML = data.map(o=>`<li>${o.id}: ${o.name}</li>`).join('');
+  });
+}
+function createOrg(){
+  fetch('/admin/orgs',{method:'POST',headers:auth(),body:JSON.stringify({name:orgName.value})}).then(()=>{
+    orgName.value=''; loadOrgs();
+  });
+}
+
+function loadDepts(){
+  fetch('/admin/depts',{headers:auth()}).then(r=>r.json()).then(data=>{
+    deptList.innerHTML = data.map(d=>`<li>${d.id}: ${d.name} (org ${d.org_id})</li>`).join('');
+  });
+}
+function createDept(){
+  fetch('/admin/depts',{method:'POST',headers:auth(),body:JSON.stringify({name:deptName.value, org_id:parseInt(deptOrgId.value)})}).then(()=>{
+    deptName.value=''; deptOrgId.value=''; loadDepts();
+  });
+}
+
+function loadUsers(){
+  fetch('/admin/users',{headers:auth()}).then(r=>r.json()).then(data=>{
+    userList.innerHTML = data.map(u=>`<li>${u.id}: ${u.username} (${u.role})</li>`).join('');
+  });
+}
+function createUser(){
+  fetch('/admin/users',{method:'POST',headers:auth(),body:JSON.stringify({username:userName.value,password:userPass.value,role:userRole.value,org_id:parseInt(userOrgId.value),dept_id:parseInt(userDeptId.value)})}).then(()=>{
+    userName.value=''; userPass.value=''; userRole.value=''; userOrgId.value=''; userDeptId.value=''; loadUsers();
+  });
+}
+
+function loadTemplates(){
+  fetch('/admin/templates',{headers:auth()}).then(r=>r.json()).then(data=>{
+    tplList.innerHTML = data.map(t=>`<li>${t.id}: ${t.name||'template'}${t.verifier_id? ' (verifier '+t.verifier_id+')':''}</li>`).join('');
+  });
+}
+function createTpl(){
+  let vid = parseInt(tplVerifier.value);
+  fetch('/admin/templates',{method:'POST',headers:auth(),body:JSON.stringify({name:tplName.value,verifier_id:isNaN(vid)?null:vid})}).then(()=>{
+    tplName.value=''; tplVerifier.value=''; loadTemplates();
+  });
+}
+
+function loadVerifiers(){
+  fetch('/admin/verifiers',{headers:auth()}).then(r=>r.json()).then(data=>{
+    verifierList.innerHTML = data.map(v=>`<li>${v}</li>`).join('');
+  });
+}
+function addVerifier(){
+  fetch('/admin/verifiers',{method:'POST',headers:auth(),body:JSON.stringify({user_id:parseInt(verifierUserId.value)})}).then(()=>{
+    verifierUserId.value=''; loadVerifiers();
+  });
+}
+</script>
+</body>
+</html>
