@@ -182,7 +182,6 @@ def test_workflow_execution_flow():
     data = resp.get_json()
     assert data['workflow']['status'] == 'approved'
 
-
 def test_actor_scope_and_resubmit():
     client = app.test_client()
     t_admin = token(client)
