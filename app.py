@@ -258,67 +258,15 @@ def remove_verifier(user_id):
     return '', 204
 
 
-@app.get('/admin/templates')
+@app.get('/verify/<code>')
 @authenticate_token
-@authorize_roles('admin')
-def list_templates():
-    return jsonify(approval.workflow_templates)
-
-
-@app.post('/admin/templates')
-@authenticate_token
-@authorize_roles('admin')
-def create_template():
-    tpl = request.get_json() or {}
-    tpl['id'] = len(approval.workflow_templates) + 1
-    approval.workflow_templates.append(tpl)
-    return jsonify(tpl), 201
-
-
-@app.put('/admin/templates/<int:template_id>')
-@authenticate_token
-@authorize_roles('admin')
-def update_template(template_id):
-    tpl = next((t for t in approval.workflow_templates if t['id'] == template_id), None)
-    if not tpl:
+def verify_form_by_code(code):
+    """通过二维码验证审批单"""
+    from controllers.verification import _find_form_by_code
+    form = _find_form_by_code(code)
+    if not form:
         return '', 404
-    tpl.update(request.get_json() or {})
-    return jsonify(tpl)
-
-
-@app.delete('/admin/templates/<int:template_id>')
-@authenticate_token
-@authorize_roles('admin')
-def delete_template(template_id):
-    approval.workflow_templates = [t for t in approval.workflow_templates if t['id'] != template_id]
-    return '', 204
-
-
-@app.get('/admin/verifiers')
-@authenticate_token
-@authorize_roles('admin')
-def list_verifiers():
-    return jsonify(sorted(verification.authorized_verifiers))
-
-
-@app.post('/admin/verifiers')
-@authenticate_token
-@authorize_roles('admin')
-def add_verifier():
-    data = request.get_json() or {}
-    uid = data.get('user_id')
-    if uid is None:
-        return '', 400
-    verification.authorized_verifiers.add(uid)
-    return jsonify({'user_id': uid}), 201
-
-
-@app.delete('/admin/verifiers/<int:user_id>')
-@authenticate_token
-@authorize_roles('admin')
-def remove_verifier(user_id):
-    verification.authorized_verifiers.discard(user_id)
-    return '', 204
+    return jsonify(form)
 
 
 if __name__ == '__main__':

@@ -23,9 +23,8 @@ def save():
 
 def init_defaults():
     """Ensure the data file exists with default structures."""
-    if _data:
-        return
-    reset_all()
+    if not _data or not _data.get('users'):
+        reset_all()
 
 
 def reset_all():

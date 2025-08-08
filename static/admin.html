@@ -1,139 +1,896 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>财务审批系统 - 管理后台</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.15.0/dist/reset.css">
   <style>
-    body { font-family: sans-serif; }
-    section { margin-bottom: 1.5em; }
-    input { margin: 0.2em; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      color: #1890ff;
+      margin: 0;
+    }
+
+    .login-section {
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 400px;
+      margin: 100px auto;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #1890ff;
+      box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
+    }
+
+    .btn {
+      background: #1890ff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s;
+    }
+
+    .btn:hover {
+      background: #40a9ff;
+    }
+
+    .btn-danger {
+      background: #ff4d4f;
+    }
+
+    .btn-danger:hover {
+      background: #ff7875;
+    }
+
+    .btn-success {
+      background: #52c41a;
+    }
+
+    .btn-success:hover {
+      background: #73d13d;
+    }
+
+    .section {
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .section h2 {
+      color: #333;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .list {
+      list-style: none;
+      margin-bottom: 20px;
+    }
+
+    .list li {
+      padding: 12px;
+      border: 1px solid #f0f0f0;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #fafafa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .list li:hover {
+      background: #f5f5f5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .stats-card {
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .stats-number {
+      font-size: 32px;
+      font-weight: bold;
+      color: #1890ff;
+      margin-bottom: 8px;
+    }
+
+    .stats-label {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .alert {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .alert-success {
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #52c41a;
+    }
+
+    .alert-error {
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #ff4d4f;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #f0f0f0;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .tab.active {
+      border-bottom-color: #1890ff;
+      color: #1890ff;
+    }
+
+    .tab:hover {
+      color: #1890ff;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
-<h1>Admin Panel</h1>
-<section id="login">
-  <h2>Login</h2>
-  <input id="username" placeholder="Username">
-  <input id="password" placeholder="Password" type="password">
-  <button onclick="login()">Login</button>
-</section>
+  <div id="login" class="login-section">
+    <h2 style="text-align: center; margin-bottom: 30px; color: #1890ff;">管理员登录</h2>
+    <div class="form-group">
+      <label>用户名</label>
+      <input id="username" type="text" placeholder="请输入用户名">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input id="password" type="password" placeholder="请输入密码">
+    </div>
+    <button class="btn" style="width: 100%;" onclick="login()">登录</button>
+  </div>
 
-<section id="orgs" style="display:none;">
-  <h2>Organizations</h2>
-  <ul id="orgList"></ul>
-  <input id="orgName" placeholder="Name">
-  <button onclick="createOrg()">Create</button>
-</section>
+  <div id="admin-panel" class="container hidden">
+    <div class="header">
+      <h1>财务审批系统 - 管理后台</h1>
+      <button class="btn btn-danger" onclick="logout()">退出登录</button>
+    </div>
 
-<section id="depts" style="display:none;">
-  <h2>Departments</h2>
-  <ul id="deptList"></ul>
-  <input id="deptName" placeholder="Name">
-  <input id="deptOrgId" placeholder="Org ID">
-  <button onclick="createDept()">Create</button>
-</section>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('dashboard')">仪表板</div>
+      <div class="tab" onclick="switchTab('organizations')">组织管理</div>
+      <div class="tab" onclick="switchTab('departments')">部门管理</div>
+      <div class="tab" onclick="switchTab('users')">用户管理</div>
+      <div class="tab" onclick="switchTab('templates')">模板管理</div>
+      <div class="tab" onclick="switchTab('verifiers')">核查人员</div>
+    </div>
 
-<section id="users" style="display:none;">
-  <h2>Users</h2>
-  <ul id="userList"></ul>
-  <input id="userName" placeholder="Username">
-  <input id="userPass" placeholder="Password" type="password">
-  <input id="userRole" placeholder="Role">
-  <input id="userOrgId" placeholder="Org ID">
-  <input id="userDeptId" placeholder="Dept ID">
-  <button onclick="createUser()">Create</button>
-</section>
+    <div id="dashboard" class="tab-content active">
+      <div class="section">
+        <h2>系统概览</h2>
+        <div class="grid">
+          <div class="stats-card">
+            <div class="stats-number" id="totalUsers">0</div>
+            <div class="stats-label">总用户数</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-number" id="totalOrgs">0</div>
+            <div class="stats-label">组织数量</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-number" id="totalDepts">0</div>
+            <div class="stats-label">部门数量</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-number" id="totalTemplates">0</div>
+            <div class="stats-label">模板数量</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<section id="templates" style="display:none;">
-  <h2>Templates</h2>
-  <ul id="tplList"></ul>
-  <input id="tplName" placeholder="Name">
-  <input id="tplVerifier" placeholder="Verifier ID">
-  <textarea id="tplSteps" placeholder='[{"id":"a1","type":"approval","approvers":[1]}]'></textarea>
-  <button onclick="createTpl()">Create</button>
-</section>
+    <div id="organizations" class="tab-content">
+      <div class="section">
+        <h2>组织管理</h2>
+        <div class="form-group">
+          <label>组织名称</label>
+          <input id="orgName" placeholder="请输入组织名称">
+        </div>
+        <button class="btn" onclick="createOrg()">创建组织</button>
+        <ul id="orgList" class="list"></ul>
+      </div>
+    </div>
 
-<section id="verifiers" style="display:none;">
-  <h2>Verifiers</h2>
-  <ul id="verifierList"></ul>
-  <input id="verifierUserId" placeholder="User ID">
-  <button onclick="addVerifier()">Add</button>
-</section>
+    <div id="departments" class="tab-content">
+      <div class="section">
+        <h2>部门管理</h2>
+        <div class="form-group">
+          <label>部门名称</label>
+          <input id="deptName" placeholder="请输入部门名称">
+        </div>
+        <div class="form-group">
+          <label>所属组织</label>
+          <select id="deptOrgId">
+            <option value="">请选择组织</option>
+          </select>
+        </div>
+        <button class="btn" onclick="createDept()">创建部门</button>
+        <ul id="deptList" class="list"></ul>
+      </div>
+    </div>
 
-<script>
-let token = '';
-function login(){
-  fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({username: username.value, password: password.value})})
-  .then(r => {if(!r.ok) throw new Error('login failed'); return r.json();})
-  .then(data => {
-    token = data.token;
-    document.getElementById('login').style.display='none';
-    document.querySelectorAll('section:not(#login)').forEach(s=>s.style.display='block');
-    loadAll();
-  })
-  .catch(() => alert('Login failed'));
-}
-function auth(){ return { 'Authorization': 'Bearer '+token, 'Content-Type':'application/json' }; }
-function loadAll(){ loadOrgs(); loadDepts(); loadUsers(); loadTemplates(); loadVerifiers(); }
+    <div id="users" class="tab-content">
+      <div class="section">
+        <h2>用户管理</h2>
+        <div class="form-group">
+          <label>用户名</label>
+          <input id="userName" placeholder="请输入用户名">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input id="userPass" type="password" placeholder="请输入密码">
+        </div>
+        <div class="form-group">
+          <label>角色</label>
+          <select id="userRole">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>所属组织</label>
+          <select id="userOrgId">
+            <option value="">请选择组织</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>所属部门</label>
+          <select id="userDeptId">
+            <option value="">请选择部门</option>
+          </select>
+        </div>
+        <button class="btn" onclick="createUser()">创建用户</button>
+        <ul id="userList" class="list"></ul>
+      </div>
+    </div>
 
-function loadOrgs(){
-  fetch('/admin/orgs',{headers:auth()}).then(r=>r.json()).then(data=>{
-    orgList.innerHTML = data.map(o=>`<li>${o.id}: ${o.name}</li>`).join('');
-  });
-}
-function createOrg(){
-  fetch('/admin/orgs',{method:'POST',headers:auth(),body:JSON.stringify({name:orgName.value})}).then(()=>{
-    orgName.value=''; loadOrgs();
-  });
-}
+    <div id="templates" class="tab-content">
+      <div class="section">
+        <h2>模板管理</h2>
+        <div class="form-group">
+          <label>模板名称</label>
+          <input id="tplName" placeholder="请输入模板名称">
+        </div>
+        <div class="form-group">
+          <label>核查人员ID</label>
+          <input id="tplVerifier" placeholder="请输入核查人员ID">
+        </div>
+        <div class="form-group">
+          <label>流程步骤 (JSON格式)</label>
+          <textarea id="tplSteps" rows="4" placeholder='[{"id":"a1","type":"approval","approvers":[1]}]'></textarea>
+        </div>
+        <button class="btn" onclick="createTpl()">创建模板</button>
+        <ul id="tplList" class="list"></ul>
+      </div>
+    </div>
 
-function loadDepts(){
-  fetch('/admin/depts',{headers:auth()}).then(r=>r.json()).then(data=>{
-    deptList.innerHTML = data.map(d=>`<li>${d.id}: ${d.name} (org ${d.org_id})</li>`).join('');
-  });
-}
-function createDept(){
-  fetch('/admin/depts',{method:'POST',headers:auth(),body:JSON.stringify({name:deptName.value, org_id:parseInt(deptOrgId.value)})}).then(()=>{
-    deptName.value=''; deptOrgId.value=''; loadDepts();
-  });
-}
+    <div id="verifiers" class="tab-content">
+      <div class="section">
+        <h2>核查人员管理</h2>
+        <div class="form-group">
+          <label>用户ID</label>
+          <input id="verifierUserId" placeholder="请输入用户ID">
+        </div>
+        <button class="btn" onclick="addVerifier()">添加核查人员</button>
+        <ul id="verifierList" class="list"></ul>
+      </div>
+    </div>
+  </div>
 
-function loadUsers(){
-  fetch('/admin/users',{headers:auth()}).then(r=>r.json()).then(data=>{
-    userList.innerHTML = data.map(u=>`<li>${u.id}: ${u.username} (${u.role})</li>`).join('');
-  });
-}
-function createUser(){
-  fetch('/admin/users',{method:'POST',headers:auth(),body:JSON.stringify({username:userName.value,password:userPass.value,role:userRole.value,org_id:parseInt(userOrgId.value),dept_id:parseInt(userDeptId.value)})}).then(()=>{
-    userName.value=''; userPass.value=''; userRole.value=''; userOrgId.value=''; userDeptId.value=''; loadUsers();
-  });
-}
+  <script>
+    let token = '';
+    let currentTab = 'dashboard';
 
-function loadTemplates(){
-  fetch('/admin/templates',{headers:auth()}).then(r=>r.json()).then(data=>{
-    tplList.innerHTML = data.map(t=>`<li>${t.id}: ${t.name||'template'} (${(t.steps||[]).length} steps)</li>`).join('');
-  });
-}
-function createTpl(){
-  let vid = parseInt(tplVerifier.value);
-  let steps = [];
-  try { steps = JSON.parse(tplSteps.value||'[]'); } catch(e){ alert('Invalid steps'); return; }
-  fetch('/admin/templates',{method:'POST',headers:auth(),body:JSON.stringify({name:tplName.value,verifier_id:isNaN(vid)?null:vid,steps})}).then(()=>{
-    tplName.value=''; tplVerifier.value=''; tplSteps.value=''; loadTemplates();
-  });
-}
+    function showAlert(message, type = 'success') {
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      document.querySelector('.container').insertBefore(alert, document.querySelector('.header').nextSibling);
+      setTimeout(() => alert.remove(), 3000);
+    }
 
-function loadVerifiers(){
-  fetch('/admin/verifiers',{headers:auth()}).then(r=>r.json()).then(data=>{
-    verifierList.innerHTML = data.map(v=>`<li>${v}</li>`).join('');
-  });
-}
-function addVerifier(){
-  fetch('/admin/verifiers',{method:'POST',headers:auth(),body:JSON.stringify({user_id:parseInt(verifierUserId.value)})}).then(()=>{
-    verifierUserId.value=''; loadVerifiers();
-  });
-}
-</script>
+    function switchTab(tabName) {
+      // 隐藏所有tab内容
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+
+      // 显示选中的tab
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+      currentTab = tabName;
+
+      // 加载对应数据
+      loadTabData(tabName);
+    }
+
+    function loadTabData(tabName) {
+      switch(tabName) {
+        case 'dashboard':
+          loadDashboard();
+          break;
+        case 'organizations':
+          loadOrgs();
+          break;
+        case 'departments':
+          loadDepts();
+          break;
+        case 'users':
+          loadUsers();
+          break;
+        case 'templates':
+          loadTemplates();
+          break;
+        case 'verifiers':
+          loadVerifiers();
+          break;
+      }
+    }
+
+    function auth() {
+      return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+    }
+
+    async function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        showAlert('请输入用户名和密码', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (!response.ok) {
+          throw new Error('登录失败');
+        }
+
+        const data = await response.json();
+        token = data.token;
+        
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        
+        loadAll();
+        showAlert('登录成功');
+      } catch (error) {
+        showAlert('登录失败，请检查用户名和密码', 'error');
+      }
+    }
+
+    function logout() {
+      token = '';
+      document.getElementById('login').classList.remove('hidden');
+      document.getElementById('admin-panel').classList.add('hidden');
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+    }
+
+    async function loadDashboard() {
+      try {
+        const [usersRes, orgsRes, deptsRes, templatesRes] = await Promise.all([
+          fetch('/admin/users', { headers: auth() }),
+          fetch('/admin/orgs', { headers: auth() }),
+          fetch('/admin/depts', { headers: auth() }),
+          fetch('/admin/templates', { headers: auth() })
+        ]);
+
+        const users = await usersRes.json();
+        const orgs = await orgsRes.json();
+        const depts = await deptsRes.json();
+        const templates = await templatesRes.json();
+
+        document.getElementById('totalUsers').textContent = users.length;
+        document.getElementById('totalOrgs').textContent = orgs.length;
+        document.getElementById('totalDepts').textContent = depts.length;
+        document.getElementById('totalTemplates').textContent = templates.length;
+      } catch (error) {
+        console.error('加载仪表板数据失败:', error);
+      }
+    }
+
+    async function loadOrgs() {
+      try {
+        const response = await fetch('/admin/orgs', { headers: auth() });
+        const orgs = await response.json();
+        
+        const orgList = document.getElementById('orgList');
+        orgList.innerHTML = orgs.map(org => `
+          <li>
+            <span>${org.id}: ${org.name}</span>
+            <div class="actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteOrg(${org.id})">删除</button>
+            </div>
+          </li>
+        `).join('');
+
+        // 更新部门管理的组织选择
+        const deptOrgSelect = document.getElementById('deptOrgId');
+        const userOrgSelect = document.getElementById('userOrgId');
+        
+        [deptOrgSelect, userOrgSelect].forEach(select => {
+          if (select) {
+            select.innerHTML = '<option value="">请选择组织</option>' + 
+              orgs.map(org => `<option value="${org.id}">${org.name}</option>`).join('');
+          }
+        });
+      } catch (error) {
+        showAlert('加载组织列表失败', 'error');
+      }
+    }
+
+    async function createOrg() {
+      const name = document.getElementById('orgName').value;
+      if (!name) {
+        showAlert('请输入组织名称', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/admin/orgs', {
+          method: 'POST',
+          headers: auth(),
+          body: JSON.stringify({ name })
+        });
+
+        if (response.ok) {
+          document.getElementById('orgName').value = '';
+          loadOrgs();
+          showAlert('组织创建成功');
+        } else {
+          throw new Error('创建失败');
+        }
+      } catch (error) {
+        showAlert('创建组织失败', 'error');
+      }
+    }
+
+    async function deleteOrg(orgId) {
+      if (!confirm('确定要删除这个组织吗？')) return;
+
+      try {
+        const response = await fetch(`/admin/orgs/${orgId}`, {
+          method: 'DELETE',
+          headers: auth()
+        });
+
+        if (response.ok) {
+          loadOrgs();
+          showAlert('组织删除成功');
+        } else {
+          throw new Error('删除失败');
+        }
+      } catch (error) {
+        showAlert('删除组织失败', 'error');
+      }
+    }
+
+    async function loadDepts() {
+      try {
+        const response = await fetch('/admin/depts', { headers: auth() });
+        const depts = await response.json();
+        
+        const deptList = document.getElementById('deptList');
+        deptList.innerHTML = depts.map(dept => `
+          <li>
+            <span>${dept.id}: ${dept.name} (组织ID: ${dept.org_id})</span>
+            <div class="actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteDept(${dept.id})">删除</button>
+            </div>
+          </li>
+        `).join('');
+
+        // 更新用户管理的部门选择
+        const userDeptSelect = document.getElementById('userDeptId');
+        if (userDeptSelect) {
+          userDeptSelect.innerHTML = '<option value="">请选择部门</option>' + 
+            depts.map(dept => `<option value="${dept.id}">${dept.name}</option>`).join('');
+        }
+      } catch (error) {
+        showAlert('加载部门列表失败', 'error');
+      }
+    }
+
+    async function createDept() {
+      const name = document.getElementById('deptName').value;
+      const orgId = document.getElementById('deptOrgId').value;
+
+      if (!name || !orgId) {
+        showAlert('请输入部门名称并选择组织', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/admin/depts', {
+          method: 'POST',
+          headers: auth(),
+          body: JSON.stringify({ name, org_id: parseInt(orgId) })
+        });
+
+        if (response.ok) {
+          document.getElementById('deptName').value = '';
+          document.getElementById('deptOrgId').value = '';
+          loadDepts();
+          showAlert('部门创建成功');
+        } else {
+          throw new Error('创建失败');
+        }
+      } catch (error) {
+        showAlert('创建部门失败', 'error');
+      }
+    }
+
+    async function deleteDept(deptId) {
+      if (!confirm('确定要删除这个部门吗？')) return;
+
+      try {
+        const response = await fetch(`/admin/depts/${deptId}`, {
+          method: 'DELETE',
+          headers: auth()
+        });
+
+        if (response.ok) {
+          loadDepts();
+          showAlert('部门删除成功');
+        } else {
+          throw new Error('删除失败');
+        }
+      } catch (error) {
+        showAlert('删除部门失败', 'error');
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const response = await fetch('/admin/users', { headers: auth() });
+        const users = await response.json();
+        
+        const userList = document.getElementById('userList');
+        userList.innerHTML = users.map(user => `
+          <li>
+            <span>${user.id}: ${user.username} (${user.role}) - 组织: ${user.org_id}, 部门: ${user.dept_id}</span>
+            <div class="actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">删除</button>
+            </div>
+          </li>
+        `).join('');
+      } catch (error) {
+        showAlert('加载用户列表失败', 'error');
+      }
+    }
+
+    async function createUser() {
+      const username = document.getElementById('userName').value;
+      const password = document.getElementById('userPass').value;
+      const role = document.getElementById('userRole').value;
+      const orgId = document.getElementById('userOrgId').value;
+      const deptId = document.getElementById('userDeptId').value;
+
+      if (!username || !password) {
+        showAlert('请输入用户名和密码', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/admin/users', {
+          method: 'POST',
+          headers: auth(),
+          body: JSON.stringify({
+            username,
+            password,
+            role,
+            org_id: parseInt(orgId) || null,
+            dept_id: parseInt(deptId) || null
+          })
+        });
+
+        if (response.ok) {
+          document.getElementById('userName').value = '';
+          document.getElementById('userPass').value = '';
+          document.getElementById('userRole').value = 'user';
+          document.getElementById('userOrgId').value = '';
+          document.getElementById('userDeptId').value = '';
+          loadUsers();
+          showAlert('用户创建成功');
+        } else {
+          throw new Error('创建失败');
+        }
+      } catch (error) {
+        showAlert('创建用户失败', 'error');
+      }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm('确定要删除这个用户吗？')) return;
+
+      try {
+        const response = await fetch(`/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: auth()
+        });
+
+        if (response.ok) {
+          loadUsers();
+          showAlert('用户删除成功');
+        } else {
+          throw new Error('删除失败');
+        }
+      } catch (error) {
+        showAlert('删除用户失败', 'error');
+      }
+    }
+
+    async function loadTemplates() {
+      try {
+        const response = await fetch('/admin/templates', { headers: auth() });
+        const templates = await response.json();
+        
+        const tplList = document.getElementById('tplList');
+        tplList.innerHTML = templates.map(tpl => `
+          <li>
+            <span>${tpl.id}: ${tpl.name || 'template'} (${(tpl.steps || []).length} 步骤)</span>
+            <div class="actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${tpl.id})">删除</button>
+            </div>
+          </li>
+        `).join('');
+      } catch (error) {
+        showAlert('加载模板列表失败', 'error');
+      }
+    }
+
+    async function createTpl() {
+      const name = document.getElementById('tplName').value;
+      const verifierId = document.getElementById('tplVerifier').value;
+      const stepsText = document.getElementById('tplSteps').value;
+
+      if (!name) {
+        showAlert('请输入模板名称', 'error');
+        return;
+      }
+
+      let steps = [];
+      if (stepsText) {
+        try {
+          steps = JSON.parse(stepsText);
+        } catch (e) {
+          showAlert('步骤格式错误，请使用正确的JSON格式', 'error');
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch('/admin/templates', {
+          method: 'POST',
+          headers: auth(),
+          body: JSON.stringify({
+            name,
+            verifier_id: verifierId ? parseInt(verifierId) : null,
+            steps
+          })
+        });
+
+        if (response.ok) {
+          document.getElementById('tplName').value = '';
+          document.getElementById('tplVerifier').value = '';
+          document.getElementById('tplSteps').value = '';
+          loadTemplates();
+          showAlert('模板创建成功');
+        } else {
+          throw new Error('创建失败');
+        }
+      } catch (error) {
+        showAlert('创建模板失败', 'error');
+      }
+    }
+
+    async function deleteTemplate(templateId) {
+      if (!confirm('确定要删除这个模板吗？')) return;
+
+      try {
+        const response = await fetch(`/admin/templates/${templateId}`, {
+          method: 'DELETE',
+          headers: auth()
+        });
+
+        if (response.ok) {
+          loadTemplates();
+          showAlert('模板删除成功');
+        } else {
+          throw new Error('删除失败');
+        }
+      } catch (error) {
+        showAlert('删除模板失败', 'error');
+      }
+    }
+
+    async function loadVerifiers() {
+      try {
+        const response = await fetch('/admin/verifiers', { headers: auth() });
+        const verifiers = await response.json();
+        
+        const verifierList = document.getElementById('verifierList');
+        verifierList.innerHTML = verifiers.map(verifier => `
+          <li>
+            <span>用户ID: ${verifier}</span>
+            <div class="actions">
+              <button class="btn btn-sm btn-danger" onclick="removeVerifier(${verifier})">移除</button>
+            </div>
+          </li>
+        `).join('');
+      } catch (error) {
+        showAlert('加载核查人员列表失败', 'error');
+      }
+    }
+
+    async function addVerifier() {
+      const userId = document.getElementById('verifierUserId').value;
+
+      if (!userId) {
+        showAlert('请输入用户ID', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/admin/verifiers', {
+          method: 'POST',
+          headers: auth(),
+          body: JSON.stringify({ user_id: parseInt(userId) })
+        });
+
+        if (response.ok) {
+          document.getElementById('verifierUserId').value = '';
+          loadVerifiers();
+          showAlert('核查人员添加成功');
+        } else {
+          throw new Error('添加失败');
+        }
+      } catch (error) {
+        showAlert('添加核查人员失败', 'error');
+      }
+    }
+
+    async function removeVerifier(userId) {
+      if (!confirm('确定要移除这个核查人员吗？')) return;
+
+      try {
+        const response = await fetch(`/admin/verifiers/${userId}`, {
+          method: 'DELETE',
+          headers: auth()
+        });
+
+        if (response.ok) {
+          loadVerifiers();
+          showAlert('核查人员移除成功');
+        } else {
+          throw new Error('移除失败');
+        }
+      } catch (error) {
+        showAlert('移除核查人员失败', 'error');
+      }
+    }
+
+    function loadAll() {
+      loadDashboard();
+      loadOrgs();
+      loadDepts();
+      loadUsers();
+      loadTemplates();
+      loadVerifiers();
+    }
+  </script>
 </body>
 </html>

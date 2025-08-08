@@ -81,6 +81,34 @@ def _export_approvals(data, fmt):
     return '', 400
 
 
+@bp.get('/dashboard')
+@authenticate_token
+def dashboard_stats():
+    """获取仪表板统计数据"""
+    forms = approval.approval_forms
+    
+    # 统计各状态的数量
+    status_counts = {}
+    total_amount = 0
+    
+    for form in forms:
+        status = form.get('status', 'draft')
+        status_counts[status] = status_counts.get(status, 0) + 1
+        
+        # 计算总金额
+        amount = form.get('data', {}).get('totalAmount', 0)
+        if isinstance(amount, (int, float)):
+            total_amount += amount
+    
+    return jsonify({
+        'pending': status_counts.get('pending', 0) + status_counts.get('in_progress', 0),
+        'approved': status_counts.get('approved', 0),
+        'rejected': status_counts.get('rejected', 0),
+        'totalAmount': total_amount,
+        'totalCount': len(forms)
+    })
+
+
 @bp.get('/approvals')
 @authenticate_token
 def approval_stats():
@@ -89,7 +117,7 @@ def approval_stats():
     end = _parse_date(request.args.get('end_date'))
 
     filtered = _filter_forms(approval.approval_forms, status, start, end)
-    total_amount = sum(f.get('data', {}).get('amount', 0) for f in filtered)
+    total_amount = sum(f.get('data', {}).get('totalAmount', 0) for f in filtered)
 
     export = request.args.get('export')
     if export:
@@ -99,15 +127,13 @@ def approval_stats():
     per_page = int(request.args.get('per_page', 10))
     items = _paginate(filtered, page, per_page)
 
-    return jsonify(
-        {
-            'total': len(filtered),
-            'page': page,
-            'per_page': per_page,
-            'total_amount': total_amount,
-            'items': items,
-        }
-    )
+    return jsonify({
+        'items': items,
+        'total': len(filtered),
+        'total_amount': total_amount,
+        'page': page,
+        'per_page': per_page
+    })
 
 
 def _filter_verifications(records, status=None, start=None, end=None):
@@ -115,21 +141,20 @@ def _filter_verifications(records, status=None, start=None, end=None):
     for record in records:
         if status and record.get('status') != status:
             continue
-        acted_at = record.get('verified_at')
-        if start and (not acted_at or datetime.fromisoformat(acted_at) < start):
+        verified_at = record.get('verified_at')
+        if start and (not verified_at or datetime.fromisoformat(verified_at) < start):
             continue
-        if end and (not acted_at or datetime.fromisoformat(acted_at) > end):
+        if end and (not verified_at or datetime.fromisoformat(verified_at) > end):
             continue
-        form = next((f for f in approval.approval_forms if f['id'] == record['form_id']), {})
-        merged = dict(record)
-        merged['amount'] = form.get('data', {}).get('amount', 0)
-        result.append(merged)
+        result.append(record)
     return result
 
 
 def _export_verifications(data, fmt):
-    headers = ['id', 'form_id', 'status', 'verified_at', 'amount']
-    rows = [[r.get(h) for h in headers] for r in data]
+    headers = ['id', 'form_id', 'status', 'verifier_id', 'verified_at']
+    rows = [
+        [r.get('id'), r.get('form_id'), r.get('status'), r.get('verifier_id'), r.get('verified_at')] for r in data
+    ]
     if fmt == 'csv':
         sio = io.StringIO()
         writer = csv.writer(sio)
@@ -170,7 +195,6 @@ def verification_stats():
     end = _parse_date(request.args.get('end_date'))
 
     filtered = _filter_verifications(approval.verification_records, status, start, end)
-    total_amount = sum(r.get('amount', 0) for r in filtered)
 
     export = request.args.get('export')
     if export:
@@ -180,12 +204,9 @@ def verification_stats():
     per_page = int(request.args.get('per_page', 10))
     items = _paginate(filtered, page, per_page)
 
-    return jsonify(
-        {
-            'total': len(filtered),
-            'page': page,
-            'per_page': per_page,
-            'total_amount': total_amount,
-            'items': items,
-        }
-    )
+    return jsonify({
+        'items': items,
+        'total': len(filtered),
+        'page': page,
+        'per_page': per_page
+    })

@@ -15,13 +15,18 @@ bp = Blueprint('approval', __name__, url_prefix='/approvals')
 
 data = storage.data()
 
+# 全局变量
+workflow_templates = []
+workflow_instances = {}
+
 
 def _refresh_refs():
-    global approval_forms, submission_records, approval_records, verification_records
+    global approval_forms, submission_records, approval_records, verification_records, workflow_templates
     approval_forms = data.setdefault('approval_forms', [])
     submission_records = data.setdefault('submission_records', [])
     approval_records = data.setdefault('approval_records', [])
     verification_records = data.setdefault('verification_records', [])
+    workflow_templates = data.setdefault('templates', [])
 
 
 def reset_data():
@@ -29,8 +34,11 @@ def reset_data():
     data['submission_records'] = []
     data['approval_records'] = []
     data['verification_records'] = []
+    data['templates'] = []
     data['next_id'] = 1
     data['next_code'] = 1
+    global workflow_instances
+    workflow_instances = {}
     _refresh_refs()
     storage.save()
 
@@ -50,44 +58,37 @@ def _find_template(template_id):
     return next((t for t in workflow_templates if t['id'] == template_id), None)
 
 
-def _after_approval(form, result):
-    """Trigger verification or finalize the workflow after approval."""
-    if result == 'approved':
-        if form['data'].get('requires_verification'):
-            vr = {
-                'id': len(verification_records) + 1,
-                'form_id': form['id'],
-                'status': 'pending',
-                'verifier_id': None,
-                'verified_at': None,
-                'comments': None,
-            }
-            verification_records.append(vr)
-            form['status'] = 'verification_pending'
-        else:
-            form['status'] = 'approved'
-    else:
-        form['status'] = 'rejected'
-    storage.save()
+def _can_approve(user_id, template):
+    """检查用户是否有权限审批"""
+    if not template:
+        return False
+    
+    nodes = template.get('workflow_config', {}).get('nodes', [])
+    for node in nodes:
+        if node.get('type') == 'approval':
+            # 检查是否是审批人
+            if user_id in node.get('approvers', []):
+                return True
+            # 检查是否是代审批人
+            if user_id in node.get('delegates', []):
+                return True
+    
+    return False
 
 
 @bp.get('')
 @authenticate_token
 def list_forms():
-    """Return approval forms visible to the current user.
-
-    Regular users can request either forms they created or forms they
-    need to act on via the ``scope`` query parameter. Admins may view
-    all forms. A ``status`` query parameter can optionally filter the
-    result set.
-    """
+    """Return approval forms visible to the current user."""
     def _actor_forms(uid):
-        ids = {r['form_id'] for r in approval_records if r['approver_id'] == uid}
-        for fid, inst in workflow_instances.items():
-            node = inst.current_node()
-            if node and (uid in node.approvers or uid in node.delegates):
-                ids.add(fid)
-        return [f for f in approval_forms if f['id'] in ids]
+        # 获取用户需要审批的表单
+        actor_forms = []
+        for form in approval_forms:
+            if form['status'] in ['pending', 'in_progress']:
+                template = _find_template(form.get('template_id'))
+                if template and _can_approve(uid, template):
+                    actor_forms.append(form)
+        return actor_forms
 
     scope = request.args.get('scope')
     forms = approval_forms
@@ -99,10 +100,23 @@ def list_forms():
             forms = _actor_forms(request.user['id'])
         else:
             forms = [f for f in forms if f['applicant_id'] == request.user['id']]
+    
     status = request.args.get('status')
     if status:
         forms = [f for f in forms if f.get('status') == status]
-    return jsonify(forms)
+    
+    # 添加分页支持
+    page = int(request.args.get('page', 1))
+    size = int(request.args.get('size', 10))
+    start = (page - 1) * size
+    end = start + size
+    
+    return jsonify({
+        'items': forms[start:end],
+        'total': len(forms),
+        'page': page,
+        'size': size
+    })
 
 
 @bp.post('')
@@ -118,9 +132,11 @@ def create_form():
         'dept_id': request.user.get('dept_id'),
         'status': 'draft',
         'submitted_at': None,
-        'code': f"APP{data['next_code']:06d}"
+        'code': f"APP{data['next_code']:06d}",
+        'created_at': datetime.utcnow().isoformat()
     }
-    # generate QR code and save path
+    
+    # 生成二维码
     os.makedirs('qr_codes', exist_ok=True)
     qr_path = os.path.join('qr_codes', f"{form['code']}.png")
     if qrcode:
@@ -159,9 +175,11 @@ def submit_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
+    
     now = datetime.utcnow().isoformat()
     form['status'] = 'submitted'
     form['submitted_at'] = now
+    
     record = {
         'id': len(submission_records) + 1,
         'form_id': form_id,
@@ -169,12 +187,12 @@ def submit_form(form_id):
         'submitted_at': now
     }
     submission_records.append(record)
-    tpl = _find_template(form.get('template_id'))
-    if tpl:
-        wf = Workflow.from_template(tpl.get('steps', []))
-        inst = WorkflowInstance(wf)
-        workflow_instances[form_id] = inst
+    
+    # 创建工作流实例
+    template = _find_template(form.get('template_id'))
+    if template and template.get('workflow_config'):
         form['status'] = 'in_progress'
+    
     storage.save()
     return jsonify(form)
 
@@ -185,8 +203,15 @@ def reject_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
+    
+    # 检查用户是否有权限审批
+    template = _find_template(form.get('template_id'))
+    if not template or not _can_approve(request.user['id'], template):
+        return '', 403
+    
     payload = request.get_json() or {}
     now = datetime.utcnow().isoformat()
+    
     sr = _find_submission_record(form_id)
     record = {
         'id': len(approval_records) + 1,
@@ -199,22 +224,10 @@ def reject_form(form_id):
         'acted_at': now,
     }
     approval_records.append(record)
-    inst = workflow_instances.get(form_id)
-    if inst:
-        inst.act(
-            actor_id=request.user['id'],
-            result='rejected',
-            comments=payload.get('comments'),
-            attachments=payload.get('attachments'),
-        )
-        form['status'] = inst.status
-    else:
-        _after_approval(form, 'rejected')
-    resp = dict(form)
-    if inst:
-        resp['workflow'] = inst.to_dict()
+    
+    form['status'] = 'rejected'
     storage.save()
-    return jsonify(resp)
+    return jsonify(form)
 
 
 @bp.post('/<int:form_id>/approve')
@@ -223,8 +236,15 @@ def approve_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
+    
+    # 检查用户是否有权限审批
+    template = _find_template(form.get('template_id'))
+    if not template or not _can_approve(request.user['id'], template):
+        return '', 403
+    
     payload = request.get_json() or {}
     now = datetime.utcnow().isoformat()
+    
     sr = _find_submission_record(form_id)
     record = {
         'id': len(approval_records) + 1,
@@ -237,22 +257,12 @@ def approve_form(form_id):
         'acted_at': now,
     }
     approval_records.append(record)
-    inst = workflow_instances.get(form_id)
-    if inst:
-        inst.act(
-            actor_id=request.user['id'],
-            result='approved',
-            comments=payload.get('comments'),
-            attachments=payload.get('attachments'),
-        )
-        form['status'] = inst.status if inst.status != 'pending' else 'in_progress'
-    else:
-        _after_approval(form, 'approved')
-    resp = dict(form)
-    if inst:
-        resp['workflow'] = inst.to_dict()
+    
+    # 简化流程：直接设置为已通过
+    form['status'] = 'approved'
+    
     storage.save()
-    return jsonify(resp)
+    return jsonify(form)
 
 
 @bp.get('/<int:form_id>')
@@ -261,8 +271,11 @@ def get_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
-    inst = workflow_instances.get(form_id)
-    resp = dict(form)
-    if inst:
-        resp['workflow'] = inst.to_dict()
-    return jsonify(resp)
+    
+    # 添加模板信息
+    template = _find_template(form.get('template_id'))
+    if template:
+        form['template'] = template
+        form['can_approve'] = _can_approve(request.user['id'], template)
+    
+    return jsonify(form)
