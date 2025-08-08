@@ -28,6 +28,17 @@ def reset_data():
 _refresh_verifiers()
 
 
+authorized_verifiers = set()
+
+
+def reset_data():
+    global authorized_verifiers
+    authorized_verifiers = {1}  # admin can verify by default
+
+
+reset_data()
+
+
 def _find_form_by_code(code):
     return next((f for f in approval.approval_forms if f.get('code') == code), None)
 

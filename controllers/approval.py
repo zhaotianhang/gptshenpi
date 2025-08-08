@@ -46,6 +46,10 @@ def _find_submission_record(form_id):
     return next((r for r in submission_records if r['form_id'] == form_id), None)
 
 
+def _find_template(template_id):
+    return next((t for t in workflow_templates if t['id'] == template_id), None)
+
+
 def _after_approval(form, result):
     """Trigger verification or finalize the workflow after approval."""
     if result == 'approved':
@@ -67,6 +71,40 @@ def _after_approval(form, result):
     storage.save()
 
 
+@bp.get('')
+@authenticate_token
+def list_forms():
+    """Return approval forms visible to the current user.
+
+    Regular users can request either forms they created or forms they
+    need to act on via the ``scope`` query parameter. Admins may view
+    all forms. A ``status`` query parameter can optionally filter the
+    result set.
+    """
+    def _actor_forms(uid):
+        ids = {r['form_id'] for r in approval_records if r['approver_id'] == uid}
+        for fid, inst in workflow_instances.items():
+            node = inst.current_node()
+            if node and (uid in node.approvers or uid in node.delegates):
+                ids.add(fid)
+        return [f for f in approval_forms if f['id'] in ids]
+
+    scope = request.args.get('scope')
+    forms = approval_forms
+    if request.user.get('role') == 'admin':
+        if scope == 'actor':
+            forms = _actor_forms(request.user['id'])
+    else:
+        if scope == 'actor':
+            forms = _actor_forms(request.user['id'])
+        else:
+            forms = [f for f in forms if f['applicant_id'] == request.user['id']]
+    status = request.args.get('status')
+    if status:
+        forms = [f for f in forms if f.get('status') == status]
+    return jsonify(forms)
+
+
 @bp.post('')
 @authenticate_token
 def create_form():
@@ -74,6 +112,7 @@ def create_form():
     form = {
         'id': data['next_id'],
         'data': payload.get('data', {}),
+        'template_id': payload.get('template_id'),
         'applicant_id': request.user['id'],
         'org_id': request.user.get('org_id'),
         'dept_id': request.user.get('dept_id'),
@@ -105,7 +144,7 @@ def update_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
-    if form['applicant_id'] != request.user['id'] or form['status'] != 'draft':
+    if form['applicant_id'] != request.user['id'] or form['status'] not in ('draft', 'rejected'):
         return '', 403
     payload = request.get_json() or {}
     if 'data' in payload:
@@ -130,6 +169,12 @@ def submit_form(form_id):
         'submitted_at': now
     }
     submission_records.append(record)
+    tpl = _find_template(form.get('template_id'))
+    if tpl:
+        wf = Workflow.from_template(tpl.get('steps', []))
+        inst = WorkflowInstance(wf)
+        workflow_instances[form_id] = inst
+        form['status'] = 'in_progress'
     storage.save()
     return jsonify(form)
 
@@ -150,12 +195,26 @@ def reject_form(form_id):
         'submission_id': sr['id'] if sr else None,
         'result': 'rejected',
         'comments': payload.get('comments'),
+        'attachments': payload.get('attachments', []),
         'acted_at': now,
     }
     approval_records.append(record)
-    _after_approval(form, 'rejected')
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='rejected',
+            comments=payload.get('comments'),
+            attachments=payload.get('attachments'),
+        )
+        form['status'] = inst.status
+    else:
+        _after_approval(form, 'rejected')
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
     storage.save()
-    return jsonify(form)
+    return jsonify(resp)
 
 
 @bp.post('/<int:form_id>/approve')
@@ -174,9 +233,36 @@ def approve_form(form_id):
         'submission_id': sr['id'] if sr else None,
         'result': 'approved',
         'comments': payload.get('comments'),
+        'attachments': payload.get('attachments', []),
         'acted_at': now,
     }
     approval_records.append(record)
-    _after_approval(form, 'approved')
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='approved',
+            comments=payload.get('comments'),
+            attachments=payload.get('attachments'),
+        )
+        form['status'] = inst.status if inst.status != 'pending' else 'in_progress'
+    else:
+        _after_approval(form, 'approved')
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
     storage.save()
-    return jsonify(form)
+    return jsonify(resp)
+
+
+@bp.get('/<int:form_id>')
+@authenticate_token
+def get_form(form_id):
+    form = _find_form(form_id)
+    if not form:
+        return '', 404
+    inst = workflow_instances.get(form_id)
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
+    return jsonify(resp)

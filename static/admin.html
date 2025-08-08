@@ -49,6 +49,7 @@
   <ul id="tplList"></ul>
   <input id="tplName" placeholder="Name">
   <input id="tplVerifier" placeholder="Verifier ID">
+  <textarea id="tplSteps" placeholder='[{"id":"a1","type":"approval","approvers":[1]}]'></textarea>
   <button onclick="createTpl()">Create</button>
 </section>
 
@@ -111,13 +112,15 @@ function createUser(){
 
 function loadTemplates(){
   fetch('/admin/templates',{headers:auth()}).then(r=>r.json()).then(data=>{
-    tplList.innerHTML = data.map(t=>`<li>${t.id}: ${t.name||'template'}${t.verifier_id? ' (verifier '+t.verifier_id+')':''}</li>`).join('');
+    tplList.innerHTML = data.map(t=>`<li>${t.id}: ${t.name||'template'} (${(t.steps||[]).length} steps)</li>`).join('');
   });
 }
 function createTpl(){
   let vid = parseInt(tplVerifier.value);
-  fetch('/admin/templates',{method:'POST',headers:auth(),body:JSON.stringify({name:tplName.value,verifier_id:isNaN(vid)?null:vid})}).then(()=>{
-    tplName.value=''; tplVerifier.value=''; loadTemplates();
+  let steps = [];
+  try { steps = JSON.parse(tplSteps.value||'[]'); } catch(e){ alert('Invalid steps'); return; }
+  fetch('/admin/templates',{method:'POST',headers:auth(),body:JSON.stringify({name:tplName.value,verifier_id:isNaN(vid)?null:vid,steps})}).then(()=>{
+    tplName.value=''; tplVerifier.value=''; tplSteps.value=''; loadTemplates();
   });
 }
 
