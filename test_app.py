@@ -1,6 +1,7 @@
 import pytest
 
 from app import app, reset_data
+from controllers import approval
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +76,7 @@ def test_admin_can_manage_templates():
     assert any(t['id'] == tid for t in resp.get_json())
     resp = client.delete(f'/admin/templates/{tid}', headers={'Authorization': f'Bearer {t}'})
     assert resp.status_code == 204
+    assert all(t['id'] != tid for t in approval.workflow_templates)
 
 
 def test_admin_can_manage_verifiers():

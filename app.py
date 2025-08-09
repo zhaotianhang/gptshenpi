@@ -232,6 +232,7 @@ def create_template():
         return '', 400
     tpl['id'] = max([t['id'] for t in data['templates']], default=0) + 1
     data['templates'].append(tpl)
+    approval._refresh_refs()
     storage.save()
     return jsonify(tpl), 201
 
@@ -257,7 +258,12 @@ def update_template(template_id):
 @authenticate_token
 @authorize_roles('admin')
 def delete_template(template_id):
-    data['templates'] = [t for t in data['templates'] if t['id'] != template_id]
+    templates = data['templates']
+    for i, t in enumerate(templates):
+        if t['id'] == template_id:
+            del templates[i]
+            break
+    approval._refresh_refs()
     storage.save()
     return '', 204
 
