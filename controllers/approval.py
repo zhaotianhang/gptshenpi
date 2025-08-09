@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request
 
 from middleware.auth import authenticate_token
 import storage
+from workflow import Workflow, WorkflowInstance
 
 bp = Blueprint('approval', __name__, url_prefix='/approvals')
 
@@ -37,8 +38,8 @@ def reset_data():
     data['templates'] = []
     data['next_id'] = 1
     data['next_code'] = 1
-    global workflow_instances
-    workflow_instances = {}
+    # Clear any in-memory workflow instances as well
+    workflow_instances.clear()
     _refresh_refs()
     storage.save()
 
@@ -64,6 +65,8 @@ def _can_approve(user_id, template):
         return False
     
     nodes = template.get('workflow_config', {}).get('nodes', [])
+    if not nodes:
+        nodes = template.get('steps', [])
     for node in nodes:
         if node.get('type') == 'approval':
             # 检查是否是审批人
@@ -187,12 +190,22 @@ def submit_form(form_id):
         'submitted_at': now
     }
     submission_records.append(record)
-    
+
     # 创建工作流实例
     template = _find_template(form.get('template_id'))
-    if template and template.get('workflow_config'):
-        form['status'] = 'in_progress'
-    
+    steps = None
+    if template:
+        steps = template.get('steps')
+        if not steps:
+            steps = template.get('workflow_config', {}).get('nodes')
+    if steps:
+        wf = Workflow.from_template(steps)
+        inst = WorkflowInstance(wf, context=form.get('data'))
+        workflow_instances[form_id] = inst
+        node = inst.current_node()
+        if node and node.type == 'approval':
+            form['status'] = 'in_progress'
+
     storage.save()
     return jsonify(form)
 
@@ -206,28 +219,45 @@ def reject_form(form_id):
     
     # 检查用户是否有权限审批
     template = _find_template(form.get('template_id'))
-    if not template or not _can_approve(request.user['id'], template):
+    if template and not _can_approve(request.user['id'], template):
         return '', 403
     
     payload = request.get_json() or {}
     now = datetime.utcnow().isoformat()
     
     sr = _find_submission_record(form_id)
+    attachments = payload.get('attachments', [])
+    comments = payload.get('comments')
+
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='rejected',
+            comments=comments,
+            attachments=attachments,
+        )
+        form['status'] = inst.status
+    else:
+        form['status'] = 'rejected'
+
     record = {
         'id': len(approval_records) + 1,
         'form_id': form_id,
         'approver_id': request.user['id'],
         'submission_id': sr['id'] if sr else None,
         'result': 'rejected',
-        'comments': payload.get('comments'),
-        'attachments': payload.get('attachments', []),
+        'comments': comments,
+        'attachments': attachments,
         'acted_at': now,
     }
     approval_records.append(record)
-    
-    form['status'] = 'rejected'
+
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
     storage.save()
-    return jsonify(form)
+    return jsonify(resp)
 
 
 @bp.post('/<int:form_id>/approve')
@@ -239,30 +269,50 @@ def approve_form(form_id):
     
     # 检查用户是否有权限审批
     template = _find_template(form.get('template_id'))
-    if not template or not _can_approve(request.user['id'], template):
+    if template and not _can_approve(request.user['id'], template):
         return '', 403
     
     payload = request.get_json() or {}
     now = datetime.utcnow().isoformat()
     
     sr = _find_submission_record(form_id)
+    attachments = payload.get('attachments', [])
+    comments = payload.get('comments')
+
+    inst = workflow_instances.get(form_id)
+    if inst:
+        inst.act(
+            actor_id=request.user['id'],
+            result='approved',
+            comments=comments,
+            attachments=attachments,
+        )
+        if inst.status == 'approved':
+            form['status'] = 'approved'
+        elif inst.status == 'rejected':
+            form['status'] = 'rejected'
+        else:
+            form['status'] = 'in_progress'
+    else:
+        form['status'] = 'approved'
+
     record = {
         'id': len(approval_records) + 1,
         'form_id': form_id,
         'approver_id': request.user['id'],
         'submission_id': sr['id'] if sr else None,
         'result': 'approved',
-        'comments': payload.get('comments'),
-        'attachments': payload.get('attachments', []),
+        'comments': comments,
+        'attachments': attachments,
         'acted_at': now,
     }
     approval_records.append(record)
-    
-    # 简化流程：直接设置为已通过
-    form['status'] = 'approved'
-    
+
+    resp = dict(form)
+    if inst:
+        resp['workflow'] = inst.to_dict()
     storage.save()
-    return jsonify(form)
+    return jsonify(resp)
 
 
 @bp.get('/<int:form_id>')
@@ -271,11 +321,15 @@ def get_form(form_id):
     form = _find_form(form_id)
     if not form:
         return '', 404
-    
-    # 添加模板信息
+
+    result = dict(form)
     template = _find_template(form.get('template_id'))
     if template:
-        form['template'] = template
-        form['can_approve'] = _can_approve(request.user['id'], template)
-    
-    return jsonify(form)
+        result['template'] = template
+        result['can_approve'] = _can_approve(request.user['id'], template)
+
+    inst = workflow_instances.get(form_id)
+    if inst:
+        result['workflow'] = inst.to_dict()
+
+    return jsonify(result)
