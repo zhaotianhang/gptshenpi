@@ -65,8 +65,6 @@ def _can_approve(user_id, template):
         return False
     
     nodes = template.get('workflow_config', {}).get('nodes', [])
-    if not nodes:
-        nodes = template.get('steps', [])
     for node in nodes:
         if node.get('type') == 'approval':
             # 检查是否是审批人
@@ -193,13 +191,9 @@ def submit_form(form_id):
 
     # 创建工作流实例
     template = _find_template(form.get('template_id'))
-    steps = None
-    if template:
-        steps = template.get('steps')
-        if not steps:
-            steps = template.get('workflow_config', {}).get('nodes')
-    if steps:
-        wf = Workflow.from_template(steps)
+    nodes = template.get('workflow_config', {}).get('nodes') if template else None
+    if nodes:
+        wf = Workflow.from_template(nodes)
         inst = WorkflowInstance(wf, context=form.get('data'))
         workflow_instances[form_id] = inst
         node = inst.current_node()

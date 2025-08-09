@@ -56,11 +56,12 @@ def test_admin_can_manage_templates():
     t = token(client, 'admin', 'admin')
     resp = client.post(
         '/admin/templates',
-        json={'name': 'T1', 'steps': ['a', 'b']},
+        json={'name': 'T1', 'steps': [{'id': 'a', 'type': 'approval'}, {'id': 'b', 'type': 'approval'}]},
         headers={'Authorization': f'Bearer {t}'},
     )
     assert resp.status_code == 201
     tpl = resp.get_json()
+    assert tpl['workflow_config']['nodes'][0]['id'] == 'a'
     tid = tpl['id']
     resp = client.put(
         f'/admin/templates/{tid}',

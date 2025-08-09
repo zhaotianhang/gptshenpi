@@ -143,10 +143,12 @@ def test_workflow_execution_flow():
     approval.workflow_templates.append({
         'id': 1,
         'name': 'two-step',
-        'steps': [
-            {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
-            {'id': 'n2', 'type': 'approval', 'approvers': [1]},
-        ],
+        'workflow_config': {
+            'nodes': [
+                {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
+                {'id': 'n2', 'type': 'approval', 'approvers': [1]},
+            ]
+        },
     })
     # create form using template
     resp = client.post(
@@ -197,10 +199,12 @@ def test_workflow_rejection_flow():
     approval.workflow_templates.append({
         'id': 1,
         'name': 'two-step',
-        'steps': [
-            {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
-            {'id': 'n2', 'type': 'approval', 'approvers': [1]},
-        ],
+        'workflow_config': {
+            'nodes': [
+                {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
+                {'id': 'n2', 'type': 'approval', 'approvers': [1]},
+            ]
+        },
     })
     resp = client.post(
         '/approvals',
@@ -240,6 +244,7 @@ def test_actor_scope_and_resubmit():
     )
     assert resp.status_code == 201
     tpl = resp.get_json()
+    assert tpl['workflow_config']['nodes'][0]['approvers'] == [2]
     # admin creates form and submits
     resp = client.post(
         '/approvals',
