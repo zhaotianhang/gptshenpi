@@ -120,19 +120,19 @@ def test_list_forms_by_user_and_status():
     # user should only see own form
     resp = client.get('/approvals', headers={'Authorization': f'Bearer {t_user}'})
     assert resp.status_code == 200
-    data = resp.get_json()
+    data = resp.get_json()['items']
     assert [f['id'] for f in data] == [form2['id']]
 
     # admin sees both forms
     resp = client.get('/approvals', headers={'Authorization': f'Bearer {t_admin}'})
     assert resp.status_code == 200
-    ids = {f['id'] for f in resp.get_json()}
+    ids = {f['id'] for f in resp.get_json()['items']}
     assert ids == {form1['id'], form2['id']}
 
     # admin can filter by status
     resp = client.get('/approvals?status=submitted', headers={'Authorization': f'Bearer {t_admin}'})
     assert resp.status_code == 200
-    data = resp.get_json()
+    data = resp.get_json()['items']
     assert [f['id'] for f in data] == [form1['id']]
 
 
@@ -157,12 +157,18 @@ def test_workflow_execution_flow():
     assert resp.status_code == 201
     form_id = resp.get_json()['id']
     # submit form -> workflow starts
-    resp = client.post(f'/approvals/{form_id}/submit', headers={'Authorization': f'Bearer {t}'})
+    resp = client.post(
+        f'/approvals/{form_id}/submit', headers={'Authorization': f'Bearer {t}'}
+    )
     assert resp.status_code == 200
+    assert resp.get_json()['status'] == 'in_progress'
     # fetch form to check flow state
-    resp = client.get(f'/approvals/{form_id}', headers={'Authorization': f'Bearer {t}'})
+    resp = client.get(
+        f'/approvals/{form_id}', headers={'Authorization': f'Bearer {t}'}
+    )
     data = resp.get_json()
     assert data['workflow']['flow'][0]['status'] == 'in_progress'
+    assert data['status'] == 'in_progress'
     # approve first node
     resp = client.post(
         f'/approvals/{form_id}/approve',
@@ -172,6 +178,7 @@ def test_workflow_execution_flow():
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['workflow']['flow'][0]['status'] == 'approved'
+    assert data['status'] == 'in_progress'
     # approve second node -> completes workflow
     resp = client.post(
         f'/approvals/{form_id}/approve',
@@ -181,6 +188,46 @@ def test_workflow_execution_flow():
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['workflow']['status'] == 'approved'
+    assert data['status'] == 'approved'
+
+
+def test_workflow_rejection_flow():
+    client = app.test_client()
+    t = token(client)
+    approval.workflow_templates.append({
+        'id': 1,
+        'name': 'two-step',
+        'steps': [
+            {'id': 'n1', 'type': 'approval', 'approvers': [1], 'next': 'n2'},
+            {'id': 'n2', 'type': 'approval', 'approvers': [1]},
+        ],
+    })
+    resp = client.post(
+        '/approvals',
+        json={'data': {'a': 1}, 'template_id': 1},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    form_id = resp.get_json()['id']
+    resp = client.post(
+        f'/approvals/{form_id}/submit', headers={'Authorization': f'Bearer {t}'}
+    )
+    assert resp.get_json()['status'] == 'in_progress'
+    # approve first node
+    resp = client.post(
+        f'/approvals/{form_id}/approve',
+        json={},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    assert resp.get_json()['status'] == 'in_progress'
+    # reject second node
+    resp = client.post(
+        f'/approvals/{form_id}/reject',
+        json={'comments': 'no'},
+        headers={'Authorization': f'Bearer {t}'},
+    )
+    data = resp.get_json()
+    assert data['status'] == 'rejected'
+    assert data['workflow']['status'] == 'rejected'
 
 def test_actor_scope_and_resubmit():
     client = app.test_client()
@@ -209,7 +256,8 @@ def test_actor_scope_and_resubmit():
     # user should see form in actor scope
     resp = client.get('/approvals?scope=actor', headers={'Authorization': f'Bearer {t_user}'})
     assert resp.status_code == 200
-    ids = [f['id'] for f in resp.get_json()]
+    data = resp.get_json()['items']
+    ids = [f['id'] for f in data]
     assert form_id in ids
 
     # user rejects the form

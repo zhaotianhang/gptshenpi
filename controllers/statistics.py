@@ -96,7 +96,7 @@ def dashboard_stats():
         status_counts[status] = status_counts.get(status, 0) + 1
         
         # 计算总金额
-        amount = form.get('data', {}).get('totalAmount', 0)
+        amount = form.get('data', {}).get('amount', 0)
         if isinstance(amount, (int, float)):
             total_amount += amount
     
@@ -117,7 +117,7 @@ def approval_stats():
     end = _parse_date(request.args.get('end_date'))
 
     filtered = _filter_forms(approval.approval_forms, status, start, end)
-    total_amount = sum(f.get('data', {}).get('totalAmount', 0) for f in filtered)
+    total_amount = sum(f.get('data', {}).get('amount', 0) for f in filtered)
 
     export = request.args.get('export')
     if export:
@@ -200,6 +200,12 @@ def verification_stats():
     if export:
         return _export_verifications(filtered, export)
 
+    total_amount = 0
+    for r in filtered:
+        form = next((f for f in approval.approval_forms if f['id'] == r['form_id']), None)
+        if form:
+            total_amount += form.get('data', {}).get('amount', 0)
+
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 10))
     items = _paginate(filtered, page, per_page)
@@ -207,6 +213,7 @@ def verification_stats():
     return jsonify({
         'items': items,
         'total': len(filtered),
+        'total_amount': total_amount,
         'page': page,
         'per_page': per_page
     })
