@@ -739,14 +739,16 @@
         const templates = await response.json();
         
         const tplList = document.getElementById('tplList');
-        tplList.innerHTML = templates.map(tpl => `
+        tplList.innerHTML = templates.map(tpl => {
+          const nodes = (tpl.workflow_config && tpl.workflow_config.nodes) || tpl.steps || [];
+          return `
           <li>
-            <span>${tpl.id}: ${tpl.name || 'template'} (${(tpl.steps || []).length} 步骤)</span>
+            <span>${tpl.id}: ${tpl.name || 'template'} (${nodes.length} 步骤)</span>
             <div class="actions">
               <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${tpl.id})">删除</button>
             </div>
           </li>
-        `).join('');
+        `}).join('');
       } catch (error) {
         showAlert('加载模板列表失败', 'error');
       }

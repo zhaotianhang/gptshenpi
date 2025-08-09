@@ -195,11 +195,41 @@ def list_templates():
     return jsonify(data['templates'])
 
 
+def _normalize_template(payload, require_config=False):
+    """Validate and normalize template structure.
+
+    Accepts either legacy `steps` or new `workflow_config` formats and
+    converts them into the standard `workflow_config` structure.
+    """
+    steps = payload.pop('steps', None)
+    if steps is not None:
+        payload['workflow_config'] = {'nodes': steps}
+
+    if 'workflow_config' in payload:
+        wf_cfg = payload['workflow_config']
+        if not isinstance(wf_cfg, dict):
+            raise ValueError('workflow_config must be an object')
+        nodes = wf_cfg.get('nodes')
+        if not isinstance(nodes, list):
+            raise ValueError('nodes must be a list')
+        for node in nodes:
+            if not isinstance(node, dict) or 'id' not in node or 'type' not in node:
+                raise ValueError('each node requires id and type')
+    elif require_config:
+        raise ValueError('workflow_config required')
+
+    return payload
+
+
 @app.post('/admin/templates')
 @authenticate_token
 @authorize_roles('admin')
 def create_template():
     tpl = request.get_json() or {}
+    try:
+        tpl = _normalize_template(tpl, require_config=True)
+    except ValueError:
+        return '', 400
     tpl['id'] = max([t['id'] for t in data['templates']], default=0) + 1
     data['templates'].append(tpl)
     storage.save()
@@ -213,7 +243,12 @@ def update_template(template_id):
     tpl = next((t for t in data['templates'] if t['id'] == template_id), None)
     if not tpl:
         return '', 404
-    tpl.update(request.get_json() or {})
+    payload = request.get_json() or {}
+    try:
+        payload = _normalize_template(payload)
+    except ValueError:
+        return '', 400
+    tpl.update(payload)
     storage.save()
     return jsonify(tpl)
 
